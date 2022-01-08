@@ -1,0 +1,3 @@
+[submodule "yanderegllib"]
+	path = yanderegllib
+	url = https://github.com/Xzyaihni/yanderegllib
