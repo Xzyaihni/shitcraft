@@ -13,8 +13,8 @@ endif()
 if(${YLOCAL})
 set(CMAKE_PREFIX_PATH /home/yanyana/cppPackages/glm/cmake)
 endif()
-set(YANDERELIBS glcyan.cpp
-yanconv.cpp)
+set(YANDERELIBS "yanderegllib/glcyan.cpp"
+"yanderegllib/yanconv.cpp")
 
 
 set(SOURCE_FILES main.cpp
@@ -32,7 +32,7 @@ else()
 set(CMAKE_BUILD_TYPE Release)
 endif()
 
-include_directories(${PROJECT_SOURCE_DIR})
+include_directories(${PROJECT_SOURCE_DIR}, "${PROJECT_SOURCE_DIR}/yanderegllib")
 
 find_package(Threads REQUIRED)
 find_package(TBB REQUIRED)
