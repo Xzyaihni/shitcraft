@@ -12,13 +12,10 @@ endif()
 
 if(${YLOCAL})
 set(CMAKE_PREFIX_PATH /home/yanyana/cppPackages/glm/cmake)
-include_directories("../yanderegllib")
-set(YANDERELIBS "../yanderegllib/glcyan.cpp"
-"../yanderegllib/yanconv.cpp")
-else()
+endif()
 set(YANDERELIBS glcyan.cpp
 yanconv.cpp)
-endif()
+
 
 set(SOURCE_FILES main.cpp
 character.cpp
