@@ -82,7 +82,10 @@ public:
 	
 	std::vector<float> generate(Vec3d<int> pos);
 	
-	int noiseParts = 4;
+	float terrainMidScale = 1;
+	float terrainLargeScale = 0.25f;
+	float temperatureScale = 0.1f;
+	float humidityScale = 0.2f;
 	int genHeight = chunkSize;
 	
 	unsigned seed = 0;
@@ -118,7 +121,7 @@ public:
 	
 	void chunk_gen();
 	void update_mesh();
-	void update_wall(Direction wall, WorldChunk* checkChunk = nullptr);
+	void update_wall(Direction wall, WorldChunk* checkChunk);
 	
 	void updateStates();
 	

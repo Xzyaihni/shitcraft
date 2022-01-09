@@ -58,7 +58,7 @@ std::vector<float> WorldGenerator::generate(Vec3d<int> pos)
 {
 	NoiseGenerator noiseGen{seed};
 
-	float noiseAdd = noiseParts/static_cast<float>(chunkSize);
+	float addTerrainMid = terrainMidScale/static_cast<float>(chunkSize);
 
 	std::vector<float> noiseMap;
 	noiseMap.reserve(chunkSize);
@@ -67,8 +67,7 @@ std::vector<float> WorldGenerator::generate(Vec3d<int> pos)
 	{
 		for(int z = 0; z < chunkSize; ++z)
 		{
-			//noiseMap.emplace_back(noiseGen.noise(pos.x+0.5f, pos.z+0.5f));
-			noiseMap.emplace_back(noiseGen.noise(pos.x*noiseParts+x*noiseAdd, pos.z*noiseParts+z*noiseAdd));
+			noiseMap.emplace_back(noiseGen.noise(pos.x*terrainMidScale+x*addTerrainMid, pos.z*terrainMidScale+z*addTerrainMid));
 		}
 	}
 	
@@ -239,10 +238,105 @@ void WorldChunk::update_mesh()
 	_wGen->_init->_modelMap[WorldChunk::getModelName(_position)] = _chunkModel;
 }
 
-void update_wall(Direction wall, WorldChunk* checkChunk = nullptr)
+void WorldChunk::update_wall(Direction wall, WorldChunk* checkChunk)
 {
-	//doing rn
-	return;
+	if(_empty)
+		return;
+
+	switch(wall)
+	{
+		case Direction::right:
+		{
+			for(int y = 0; y < chunkSize; ++y)
+			{
+				for(int z = 0; z < chunkSize; ++z)
+				{
+					if(!getBlock({chunkSize-1, y, z}).isTransparent() && checkChunk->getBlock({0, y, z}).isTransparent())
+					{
+						a_rightFace({chunkSize-1, y, z});
+					}
+				}
+			}
+			break;
+		}
+		
+		case Direction::left:
+		{
+			for(int y = 0; y < chunkSize; ++y)
+			{
+				for(int z = 0; z < chunkSize; ++z)
+				{
+					if(!getBlock({0, y, z}).isTransparent() && checkChunk->getBlock({chunkSize-1, y, z}).isTransparent())
+					{
+						a_leftFace({0, y, z});
+					}
+				}
+			}
+			break;
+		}
+		
+		case Direction::up:
+		{
+			for(int x = 0; x < chunkSize; ++x)
+			{
+				for(int z = 0; z < chunkSize; ++z)
+				{
+					if(!getBlock({x, chunkSize-1, z}).isTransparent() && checkChunk->getBlock({x, 0, z}).isTransparent())
+					{
+						a_upFace({x, chunkSize-1, z});
+					}
+				}
+			}
+			break;
+		}
+		
+		case Direction::down:
+		{
+			for(int x = 0; x < chunkSize; ++x)
+			{
+				for(int z = 0; z < chunkSize; ++z)
+				{
+					if(!getBlock({x, 0, z}).isTransparent() && checkChunk->getBlock({x, chunkSize-1, z}).isTransparent())
+					{
+						a_downFace({x, 0, z});
+					}
+				}
+			}
+			break;
+		}
+		
+		case Direction::forward:
+		{
+			for(int x = 0; x < chunkSize; ++x)
+			{
+				for(int y = 0; y < chunkSize; ++y)
+				{
+					if(!getBlock({x, y, chunkSize-1}).isTransparent() && checkChunk->getBlock({x, y, 0}).isTransparent())
+					{
+						a_forwardFace({x, y, chunkSize-1});
+					}
+				}
+			}
+			break;
+		}
+		
+		case Direction::back:
+		{
+			for(int x = 0; x < chunkSize; ++x)
+			{
+				for(int y = 0; y < chunkSize; ++y)
+				{
+					if(!getBlock({x, y, 0}).isTransparent() && checkChunk->getBlock({x, y, chunkSize-1}).isTransparent())
+					{
+						a_backFace({x, y, 0});
+					}
+				}
+			}
+			break;
+		}
+	}
+	
+	_wGen->_init->_modelMap[WorldChunk::getModelName(_position)] = _chunkModel;
 }
 
 void WorldChunk::a_forwardFace(Vec3d<int> pos)

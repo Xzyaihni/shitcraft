@@ -27,9 +27,16 @@ std::mutex globalMutexI;
 
 class WorldController
 {
-public:
+private:
 	enum YKey {forward = 0, back, right, left,  jump, crouch, LAST};
+	
+	struct UpdateChunk
+	{
+		Vec3d<int> pos;
+		uint8_t genMask;
+	};
 
+public:
 	WorldController();
 	void graphics_init();
 	
@@ -59,7 +66,7 @@ public:
 	float mouseSens;
 	
 	std::map<Vec3d<int>, WorldChunk> loadedChunks;
-	std::vector<Vec3d<int>> loadedChunkPos;
+	std::queue<UpdateChunk> loadedChunkPos;
 	
 	std::queue<Vec3d<int>> initializeChunks;
 	
@@ -150,11 +157,14 @@ WorldController::WorldController()
 	_mainCharacter = Character(&_mainPhysCtl);
 	_mainCharacter.moveSpeed = 1.5f;
 	_mainCharacter.floating = true;
-	_mainCharacter.position = {0, 0, 0};
+	_mainCharacter.position = {0, 30, 0};
 	_mainPhysCtl.physObjs.push_back(_mainCharacter);
 	
 	_worldGen = WorldGenerator(&_mainInit, "block_textures");
-	_worldGen.noiseParts = 1;
+	_worldGen.terrainMidScale = 1;
+	_worldGen.terrainLargeScale = 0.25f;
+	_worldGen.temperatureScale = 0.1f;
+	_worldGen.humidityScale = 0.2f;
 	_worldGen.genHeight = 32;
 	_worldGen.seed = rand();
 	std::cout << "world seed: " << _worldGen.seed << std::endl;
@@ -376,13 +386,13 @@ void WorldController::chunkUpdateThread()
 		WorldChunk chunk = WorldChunk(&_worldGen, chunkPos);
 		chunk.chunk_gen();
 		
-		loadedChunks[chunkPos] = std::move(chunk);
-		
 		{
 			std::unique_lock<std::mutex> lock(globalMutexI);
 		
+			loadedChunks[chunkPos] = std::move(chunk);
+		
 			initializeChunks.push(chunkPos);
-			loadedChunkPos.push_back(chunkPos);
+			loadedChunkPos.push({chunkPos, 0x3f});
 			
 			++_currIndex;
 		}
@@ -441,6 +451,62 @@ void WorldController::slow_update()
 					_condVar.notify_one();
 				}
 			}
+		}
+	}
+	
+	//update chunk meshes to make the block walls continious across chunks
+	int queueSize = loadedChunkPos.size();
+	for(int i = 0; i<queueSize; ++i)
+	{
+		bool found = false;
+		UpdateChunk currChunk = loadedChunkPos.front();
+		Vec3d<int> currPos = currChunk.pos;
+		
+		if(loadedChunks.count(currPos)!=0)
+		{
+			if(loadedChunks.count({currPos.x+1, currPos.y, currPos.z})!=0 && (currChunk.genMask&0x01)!=0)
+			{
+				currChunk.genMask &= ~0x01;
+				loadedChunks[currPos].update_wall(Direction::right, &loadedChunks[{currPos.x+1, currPos.y, currPos.z}]);
+			}
+			
+			if(loadedChunks.count({currPos.x-1, currPos.y, currPos.z})!=0 && (currChunk.genMask&0x02)!=0)
+			{
+				currChunk.genMask &= ~0x02;
+				loadedChunks[currPos].update_wall(Direction::left, &loadedChunks[{currPos.x-1, currPos.y, currPos.z}]);
+			}
+			
+			if(loadedChunks.count({currPos.x, currPos.y+1, currPos.z})!=0 && (currChunk.genMask&0x04)!=0)
+			{
+				currChunk.genMask &= ~0x04;
+				loadedChunks[currPos].update_wall(Direction::up, &loadedChunks[{currPos.x, currPos.y+1, currPos.z}]);
+			}
+			
+			if(loadedChunks.count({currPos.x, currPos.y-1, currPos.z})!=0 && (currChunk.genMask&0x08)!=0)
+			{
+				currChunk.genMask &= ~0x08;
+				loadedChunks[currPos].update_wall(Direction::down, &loadedChunks[{currPos.x, currPos.y-1, currPos.z}]);
+			}
+			
+			if(loadedChunks.count({currPos.x, currPos.y, currPos.z+1})!=0 && (currChunk.genMask&0x10)!=0)
+			{
+				currChunk.genMask &= ~0x10;
+				loadedChunks[currPos].update_wall(Direction::forward, &loadedChunks[{currPos.x, currPos.y, currPos.z+1}]);
+			}
+			
+			if(loadedChunks.count({currPos.x, currPos.y, currPos.z-1})!=0 && (currChunk.genMask&0x20)!=0)
+			{
+				currChunk.genMask &= ~0x20;
+				loadedChunks[currPos].update_wall(Direction::back, &loadedChunks[{currPos.x, currPos.y, currPos.z-1}]);
+			}
+		}
+		
+		{
+			std::unique_lock<std::mutex> lock(globalMutexI);
+			
+			loadedChunkPos.pop();
+			if(currChunk.genMask!=0)
+				loadedChunkPos.push(currChunk);
 		}
 	}
 }
