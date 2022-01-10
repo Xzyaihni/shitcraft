@@ -1,9 +1,9 @@
 #include <iostream>
 #include <algorithm>
 #include <chrono>
+#include <execution>
 
 #include "world.h"
-#include "noise.h"
 #include "inventory.h"
 #include "types.h"
 
@@ -52,26 +52,41 @@ atlasName(atlasName), _texAtlas(init->_textureMap[atlasName].width(), init->_tex
 {
 	_texAtlas.setHorizontalBlocks(8);
 	_texAtlas.setVerticalBlocks(8);
+
+	genHeight = 4;
+}
+
+void WorldGenerator::changeSeed(unsigned seed)
+{
+	_noiseGen = NoiseGenerator(seed);
 }
 
 std::vector<float> WorldGenerator::generate(Vec3d<int> pos)
 {
-	NoiseGenerator noiseGen{seed};
-
+	float addTerrainSmall = terrainSmallScale/static_cast<float>(chunkSize);
 	float addTerrainMid = terrainMidScale/static_cast<float>(chunkSize);
+	float addTerrainLarge = terrainLargeScale/static_cast<float>(chunkSize);
 
 	std::vector<float> noiseMap;
-	noiseMap.reserve(chunkSize);
+	noiseMap.reserve(chunkSize*chunkSize);
 	
 	for(int x = 0; x < chunkSize; ++x)
 	{
 		for(int z = 0; z < chunkSize; ++z)
 		{
-			noiseMap.emplace_back(noiseGen.noise(pos.x*terrainMidScale+x*addTerrainMid, pos.z*terrainMidScale+z*addTerrainMid));
+			float smallNoise = _noiseGen.noise(pos.x*terrainSmallScale+x*addTerrainSmall, pos.z*terrainSmallScale+z*addTerrainSmall)/4;
+			float midNoise = _noiseGen.noise(pos.x*terrainMidScale+x*addTerrainMid, pos.z*terrainMidScale+z*addTerrainMid);
+			float largeNoise = _noiseGen.noise(pos.x*terrainLargeScale+x*addTerrainLarge, pos.z*terrainLargeScale+z*addTerrainLarge)*2;
+		
+			noiseMap.emplace_back(midNoise*largeNoise+smallNoise);
 		}
 	}
 	
 	return std::move(noiseMap);
+}
+
+std::vector<float> WorldGenerator::generate_biomes(Vec3d<int> pos)
+{
 }
 
 
@@ -81,7 +96,7 @@ void WorldBlock::updateBlock()
 
 Loot WorldBlock::breakBlock()
 {
-	return Loot();
+	return Loot{};
 }
 
 TextureFace WorldBlock::getTexture()
@@ -123,7 +138,7 @@ WorldChunk::WorldChunk(WorldGenerator* wGen, Vec3d<int> pos) : _wGen(wGen), _pos
 
 void WorldChunk::chunk_gen()
 {	
-	if(_position.y*chunkSize>_wGen->genHeight)
+	if(_position.y>_wGen->genHeight)
 	{
 		_empty = true;
 		return;
@@ -134,12 +149,20 @@ void WorldChunk::chunk_gen()
 	
 	bool overground = _position.y>=0;
 	
+	if(!overground)
+	{
+		_chunkBlocks = std::vector<WorldBlock>(chunkSize*chunkSize*chunkSize, WorldBlock{Block::stone});
+		
+		update_states();
+		update_mesh();
+		
+		return;
+	}
+	
+	std::vector<float> noiseMap = _wGen->generate(_position);
+	
 	_chunkBlocks.clear();
 	_chunkBlocks.reserve(chunkSize*chunkSize*chunkSize);
-	
-	std::vector<float> noiseMap;
-	if(overground)
-		noiseMap = _wGen->generate(_position);
 	
 	for(int x = 0; x < chunkSize; ++x)
 	{
@@ -147,38 +170,31 @@ void WorldChunk::chunk_gen()
 		{
 			for(int z = 0; z < chunkSize; ++z)
 			{
-				float currNoise;
-				if(overground)
-				{
-					currNoise = noiseMap[x*chunkSize+z]*_wGen->genHeight;
-				} else
-				{
-					currNoise = 1;
-				}
+				float currNoise = noiseMap[x*chunkSize+z]*chunkSize;
 			
 				if(_position.y*chunkSize+y<currNoise)
 				{
 					bool currGrass = (_position.y*chunkSize+y+1)>=currNoise;
 					_chunkBlocks.emplace_back(WorldBlock{Block::dirt, BlockInfo{currGrass}});
-				} else
-				{
-					_chunkBlocks.emplace_back(WorldBlock{Block::air});
+					continue;
 				}
+				
+				_chunkBlocks.emplace_back(WorldBlock{Block::air});
 			}
 		}
 	}
 	
-	updateStates();
+	update_states();
 	
 	update_mesh();
 }
 
-void WorldChunk::updateStates()
+void WorldChunk::update_states()
 {
 	if(_empty)
 		return;
 
-	std::for_each(_chunkBlocks.begin(), _chunkBlocks.end(), [](WorldBlock& block)
+	std::for_each(std::execution::par_unseq, _chunkBlocks.begin(), _chunkBlocks.end(), [](WorldBlock& block)
 	{
 			block.updateBlock();
 	});
@@ -192,6 +208,8 @@ void WorldChunk::update_mesh()
 	_chunkModel = YandereModel();
 		
 	_indexOffset = 0;
+		
+	int airAmount = 0;
 		
 	for(int x = 0; x < chunkSize; ++x)
 	{
@@ -230,11 +248,25 @@ void WorldChunk::update_mesh()
 					{
 						a_leftFace({x, y, z});
 					}
+				} else
+				{
+					++airAmount;
 				}
 			}
 		}
 	}
-		
+	
+	if(airAmount==chunkSize)
+	{
+		_empty = true;
+		return;
+	}
+	
+	apply_model();
+}
+
+void WorldChunk::apply_model()
+{
 	_wGen->_init->_modelMap[WorldChunk::getModelName(_position)] = _chunkModel;
 }
 
@@ -335,8 +367,6 @@ void WorldChunk::update_wall(Direction wall, WorldChunk* checkChunk)
 			break;
 		}
 	}
-	
-	_wGen->_init->_modelMap[WorldChunk::getModelName(_position)] = _chunkModel;
 }
 
 void WorldChunk::a_forwardFace(Vec3d<int> pos)
@@ -490,7 +520,7 @@ WorldBlock& WorldChunk::getBlock(Vec3d<int> pos)
 
 bool WorldChunk::empty()
 {
-	return _empty;
+	return _empty || _wGen==nullptr;
 }
 
 Vec3d<int> WorldChunk::position()

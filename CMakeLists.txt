@@ -2,17 +2,16 @@ cmake_minimum_required(VERSION 3.13)
 project(shitcraft)
 set(CMAKE_CXX_STANDARD 20)
 
-option(YLOCAL "don't use this option" "OFF")
-option(YDEBUG "build in debug mode" "OFF")
-option(YCROSSCOMPILEW "cross compile on linux for windows" "OFF")
+option(Y_DEBUG "build in debug mode" "OFF")
+option(Y_SANITIZE "build with address sanitizer" "OFF")
+option(Y_CROSSCOMPILEW "cross compile on linux for windows" "OFF")
+set(Y_GLMPATH "/home/yanyana/cppPackages/glm" CACHE FILEPATH "path to glm library")
 
-if(${YCROSSCOMPILEW})
+if(${Y_CROSSCOMPILEW})
 	set(CMAKE_CXX_COMPILER i686-w64-mingw32-g++)
 endif()
 
-if(${YLOCAL})
-set(CMAKE_PREFIX_PATH /home/yanyana/cppPackages/glm/cmake)
-endif()
+set(CMAKE_PREFIX_PATH "${Y_GLMPATH}/cmake")
 set(YANDERELIBS "yanderegllib/glcyan.cpp"
 "yanderegllib/yanconv.cpp")
 
@@ -26,10 +25,10 @@ physics.cpp
 types.cpp
 ${YANDERELIBS})
 
-if(${YDEBUG})
-set(CMAKE_BUILD_TYPE Debug)
+if(${Y_DEBUG})
+	set(CMAKE_BUILD_TYPE Debug)
 else()
-set(CMAKE_BUILD_TYPE Release)
+	set(CMAKE_BUILD_TYPE Release)
 endif()
 
 include_directories(${PROJECT_SOURCE_DIR}, "${PROJECT_SOURCE_DIR}/yanderegllib")
@@ -59,15 +58,21 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${OPENGL_INCLUDE_DIR}
 ${GLUT_INCLUDE_DIR}
 ${FREETYPE_INCLUDE_DIRS})
 
-if(${YCROSSCOMPILEW})
+if(${Y_CROSSCOMPILEW})
 	target_link_libraries(${PROJECT_NAME} -static-libgcc -static-libstdc++)
 endif()
 
-if(${YDEBUG})
-target_link_libraries(${PROJECT_NAME} -pg -fsanitize=address)
+
+if(${Y_DEBUG})
+	target_link_libraries(${PROJECT_NAME} -pg)
+	
+	if(${Y_SANITIZE})
+		target_link_libraries(${PROJECT_NAME} -fsanitize=address)
+	endif()
 else()
-target_link_libraries(${PROJECT_NAME} -O3)
+	target_link_libraries(${PROJECT_NAME} -O3)
 endif()
+
 target_link_libraries(${PROJECT_NAME} ${THREADS_LIBRARIES} -lpthread)
 target_link_libraries(${PROJECT_NAME} ${OPENGL_LIBRARIES})
 target_link_libraries(${PROJECT_NAME} ${GLEW_LIBRARIES})

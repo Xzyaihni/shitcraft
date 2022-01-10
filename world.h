@@ -6,6 +6,7 @@
 #include <glcyan.h>
 
 #include "types.h"
+#include "noise.h"
 
 namespace WorldTypes
 {
@@ -80,21 +81,25 @@ public:
 	WorldGenerator();
 	WorldGenerator(YandereInitializer* init, std::string atlasName);
 	
-	std::vector<float> generate(Vec3d<int> pos);
+	void changeSeed(unsigned seed);
 	
+	std::vector<float> generate(Vec3d<int> pos);
+	std::vector<float> generate_biomes(Vec3d<int> pos);
+	
+	float terrainSmallScale = 2;
 	float terrainMidScale = 1;
 	float terrainLargeScale = 0.25f;
 	float temperatureScale = 0.1f;
 	float humidityScale = 0.2f;
-	int genHeight = chunkSize;
-	
-	unsigned seed = 0;
+	float genHeight = chunkSize;
 	
 	std::string atlasName;
 
 protected:
 	YandereInitializer* _init;
 	BlockTexAtlas _texAtlas;
+
+	NoiseGenerator _noiseGen;
 
 	friend class WorldChunk;
 };
@@ -123,7 +128,9 @@ public:
 	void update_mesh();
 	void update_wall(Direction wall, WorldChunk* checkChunk);
 	
-	void updateStates();
+	void apply_model();
+	
+	void update_states();
 	
 	Vec3d<int> closestBlock(Vec3d<float> pos);
 	WorldBlock& getBlock(Vec3d<int> pos);
@@ -142,7 +149,7 @@ private:
 	void a_upFace(Vec3d<int> pos);
 	void a_downFace(Vec3d<int> pos);
 
-	WorldGenerator* _wGen;
+	WorldGenerator* _wGen = nullptr;
 	
 	std::vector<WorldBlock> _chunkBlocks;
 	
