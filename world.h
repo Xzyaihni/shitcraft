@@ -158,7 +158,7 @@ private:
 	
 	Vec3d<int> _position;
 	
-	bool _empty = false;
+	bool _empty = true;
 };
 
 #endif

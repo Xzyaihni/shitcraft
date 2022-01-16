@@ -272,8 +272,9 @@ void WorldChunk::apply_model()
 
 void WorldChunk::update_wall(Direction wall, WorldChunk* checkChunk)
 {
-	if(_empty)
+	if(_empty || checkChunk->empty())
 		return;
+		
 
 	switch(wall)
 	{

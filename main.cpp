@@ -13,6 +13,7 @@
 #include <future>
 
 #include <glcyan.h>
+#include <ythreads.h>
 #include <GLFW/glfw3.h>
 
 #include "world.h"
@@ -35,7 +36,14 @@ private:
 	struct UpdateChunk
 	{
 		Vec3d<int> pos;
-		uint8_t genMask;
+		bool right = true;
+		bool left = true;
+		bool up = true;
+		bool down = true;
+		bool forward = true;
+		bool back = true;
+		
+		bool walls_or() {return right || left || up || down || forward || back;};
 	};
 
 public:
@@ -91,7 +99,8 @@ private:
 
 	int _chunksAmount;
 	
-	std::vector<std::future<void>> _futuresVec;
+	YanderePool _cGenPool;
+	YanderePool _cWallPool;
 
 	std::map<Vec3d<int>, YandereObject> _drawMeshes;
 	std::map<Vec3d<int>, bool> _meshVisible;
@@ -160,15 +169,22 @@ WorldController::WorldController()
 	_mainPhysCtl.physObjs.push_back(_mainCharacter);
 	
 	_worldGen = WorldGenerator(&_mainInit, "block_textures");
-	_worldGen.terrainSmallScale = 2;
-	_worldGen.terrainMidScale = 0.5f;
-	_worldGen.terrainLargeScale = 0.05f;
-	_worldGen.temperatureScale = 0.01f;
-	_worldGen.humidityScale = 0.02f;
+	_worldGen.terrainSmallScale = 2.1f;
+	_worldGen.terrainMidScale = 0.44f;
+	_worldGen.terrainLargeScale = 0.023f;
+	_worldGen.temperatureScale = 0.0111f;
+	_worldGen.humidityScale = 0.0276f;
 	
 	unsigned currSeed = time(NULL);
 	_worldGen.changeSeed(currSeed);
 	std::cout << "world seed: " << currSeed << std::endl;
+	
+	
+	const int wallUpdateThreads = 1;
+	const int chunkLoadThreads = std::thread::hardware_concurrency()-wallUpdateThreads-1;
+	
+	_cGenPool = YanderePool(chunkLoadThreads, &WorldController::chunk_loader, this, Vec3d<int>{0, 0, 0});
+	_cWallPool = YanderePool(wallUpdateThreads, &WorldController::update_walls, this, UpdateChunk{Vec3d<int>{0, 0, 0}});
 	
 	mousepos_update(_lastMouseX, _lastMouseY);
 }
@@ -218,6 +234,9 @@ void WorldController::graphics_init()
 void WorldController::window_terminate()
 {
 	glfwDestroyWindow(_mainWindow);
+	
+	_cGenPool.exit_threads();
+	_cWallPool.exit_threads();
 }
 
 void WorldController::updateStatusTexts()
@@ -373,97 +392,100 @@ void WorldController::update_walls(UpdateChunk currChunk)
 	WorldChunk* currChunkPtr = &loadedChunks[currPos];
 	
 	if(currChunkPtr->empty())
-		return;
-		
-	if(loadedChunks.count(currPos)!=0)
-	{
-		if(loadedChunks.count({currPos.x+1, currPos.y, currPos.z})!=0 && (currChunk.genMask&0x01)!=0)
-		{
-			WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x+1, currPos.y, currPos.z});
-		
-			if(!checkChunkPtr->empty())
-			{
-				currChunk.genMask &= ~0x01;
-				currChunkPtr->update_wall(Direction::right, checkChunkPtr);
-			}
-		}
-		
-		if(loadedChunks.count({currPos.x-1, currPos.y, currPos.z})!=0 && (currChunk.genMask&0x02)!=0)
-		{
-			WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x-1, currPos.y, currPos.z});
-		
-			if(!checkChunkPtr->empty())
-			{
-				currChunk.genMask &= ~0x02;
-				currChunkPtr->update_wall(Direction::left, checkChunkPtr);
-			}
-		}
-		
-		if(loadedChunks.count({currPos.x, currPos.y+1, currPos.z})!=0 && (currChunk.genMask&0x04)!=0)
-		{
-			WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x, currPos.y+1, currPos.z});
-		
-			if(!checkChunkPtr->empty())
-			{
-				currChunk.genMask &= ~0x04;
-				currChunkPtr->update_wall(Direction::up, checkChunkPtr);
-			}
-		}
-		
-		if(loadedChunks.count({currPos.x, currPos.y-1, currPos.z})!=0 && (currChunk.genMask&0x08)!=0)
-		{
-			WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x, currPos.y-1, currPos.z});
-		
-			if(!checkChunkPtr->empty())
-			{
-				currChunk.genMask &= ~0x08;
-				currChunkPtr->update_wall(Direction::down, checkChunkPtr);
-			}
-		}
-		
-		if(loadedChunks.count({currPos.x, currPos.y, currPos.z+1})!=0 && (currChunk.genMask&0x10)!=0)
-		{
-			WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x, currPos.y, currPos.z+1});
-		
-			if(!checkChunkPtr->empty())
-			{
-				currChunk.genMask &= ~0x10;
-				currChunkPtr->update_wall(Direction::forward, checkChunkPtr);
-			}
-		}
-		
-		if(loadedChunks.count({currPos.x, currPos.y, currPos.z-1})!=0 && (currChunk.genMask&0x20)!=0)
-		{
-			WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x, currPos.y, currPos.z-1});
-		
-			if(!checkChunkPtr->empty())
-			{
-				currChunk.genMask &= ~0x20;
-				currChunkPtr->update_wall(Direction::back, checkChunkPtr);
-			}
-		}
-	}
-		
 	{
 		std::unique_lock<std::mutex> lock(mutexUpdateQueue);
-
-		if(currChunk.genMask!=0)
-			loadedChunkPos.push(currChunk);
+	
+		loadedChunkPos.push(currChunk);
+		
+		return;
 	}
 	
-	std::unique_lock<std::mutex> lock(mutexMeshes);
 	
-	currChunkPtr->apply_model();
+	if(loadedChunks.count(currPos)!=0)
+	{
+		{
+			std::unique_lock<std::mutex> lock(mutexUpdateQueue);
+			
+			if(loadedChunks.count({currPos.x+1, currPos.y, currPos.z})!=0 && currChunk.right)
+			{
+				WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x+1, currPos.y, currPos.z});
+			
+				if(!checkChunkPtr->empty())
+				{
+					currChunk.right = false;
+					currChunkPtr->update_wall(Direction::right, checkChunkPtr);
+				}
+			}
+			
+			if(loadedChunks.count({currPos.x-1, currPos.y, currPos.z})!=0 && currChunk.left)
+			{
+				WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x-1, currPos.y, currPos.z});
+			
+				if(!checkChunkPtr->empty())
+				{
+					currChunk.left = false;
+					currChunkPtr->update_wall(Direction::left, checkChunkPtr);
+				}
+			}
+			
+			if(loadedChunks.count({currPos.x, currPos.y+1, currPos.z})!=0 && currChunk.up)
+			{
+				WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x, currPos.y+1, currPos.z});
+			
+				if(!checkChunkPtr->empty())
+				{
+					currChunk.up = false;
+					currChunkPtr->update_wall(Direction::up, checkChunkPtr);
+				}
+			}
+			
+			if(loadedChunks.count({currPos.x, currPos.y-1, currPos.z})!=0 && currChunk.down)
+			{
+				WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x, currPos.y-1, currPos.z});
+			
+				if(!checkChunkPtr->empty())
+				{
+					currChunk.down = false;
+					currChunkPtr->update_wall(Direction::down, checkChunkPtr);
+				}
+			}
+			
+			if(loadedChunks.count({currPos.x, currPos.y, currPos.z+1})!=0 && currChunk.forward)
+			{
+				WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x, currPos.y, currPos.z+1});
+			
+				if(!checkChunkPtr->empty())
+				{
+					currChunk.forward = false;
+					currChunkPtr->update_wall(Direction::forward, checkChunkPtr);
+				}
+			}
+			
+			if(loadedChunks.count({currPos.x, currPos.y, currPos.z-1})!=0 && currChunk.back)
+			{
+				WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x, currPos.y, currPos.z-1});
+			
+				if(!checkChunkPtr->empty())
+				{
+					currChunk.back = false;
+					currChunkPtr->update_wall(Direction::back, checkChunkPtr);
+				}
+			}
+		}
+		
+		std::unique_lock<std::mutex> lock2(mutexMeshes);
+	
+		currChunkPtr->apply_model();
+	}
+		
+	std::unique_lock<std::mutex> lock(mutexUpdateQueue);
+
+	if(currChunk.walls_or())
+		loadedChunkPos.push(currChunk);
 }
 
 void WorldController::chunk_loader(Vec3d<int> chunkPos)
 {
-	{
-		std::unique_lock<std::mutex> lock(mutexUpdateQueue);
-		
-		loadedChunks[chunkPos] = WorldChunk();
-	}
-	
 	WorldChunk genChunk = WorldChunk(&_worldGen, chunkPos);
 	genChunk.chunk_gen();
 		
@@ -473,7 +495,7 @@ void WorldController::chunk_loader(Vec3d<int> chunkPos)
 		loadedChunks[chunkPos] = std::move(genChunk);
 		
 		initializeChunks.push(chunkPos);
-		loadedChunkPos.push({chunkPos, 0x3f});
+		loadedChunkPos.push({chunkPos});
 	}
 }
 
@@ -493,9 +515,10 @@ void WorldController::slow_update()
 				
 				if(loadedChunks.count(checkChunk)==0 && !updateLoaded[checkChunk])
 				{
+					loadedChunks[checkChunk] = WorldChunk();
 					updateLoaded[checkChunk] = true;
 						
-					_futuresVec.push_back(std::async(std::launch::async, &WorldController::chunk_loader, this, checkChunk));
+					_cGenPool.run(checkChunk);
 				}
 			}
 		}
@@ -503,11 +526,10 @@ void WorldController::slow_update()
 	
 	//update chunk meshes to make the block walls continious across chunks
 	int queueSize = loadedChunkPos.size();
-	_futuresVec.reserve(queueSize);
 	for(int i = 0; i<queueSize; ++i)
 	{
-		_futuresVec.emplace_back(std::async(std::launch::async, &WorldController::update_walls, this, loadedChunkPos.front()));
-		
+		_cWallPool.run(loadedChunkPos.front());
+
 		loadedChunkPos.pop();
 	}
 }
