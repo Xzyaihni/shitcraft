@@ -151,8 +151,8 @@ WorldController::WorldController()
 	
 	_guiCamera = YandereCamera({0, 0, 1}, {0, 0, 0});
 	
-	_guiWidth = 50.0f;
-	_guiHeight = 50.0f;
+	_guiWidth = 1000;
+	_guiHeight = 1000;
 	_guiCamera.createProjection({
 	-_guiWidth,
 	_guiWidth,
@@ -212,8 +212,8 @@ void WorldController::graphics_init()
 	_mainInit.createShaderProgram(0, {"defaultflat.fragment", "defaultflat.vertex"});
 	_mainInit.createShaderProgram(1, {"text.fragment", "defaultflat.vertex"});
 	
-	const float textPadding = 0.5f;
-	const float textDistance = 0.75f;
+	const float textPadding = 10.0f;
+	const float textDistance = 15.0f;
 	
 	_textsMap["xPos"] = _mainInit.createText("undefined", "FreeSans", 30, 0, 0);
 	float xPosHeight = _textsMap["xPos"].textHeight();
@@ -568,6 +568,7 @@ void WorldController::mousepos_update(int x, int y)
 
 void WorldController::keyboard_func(int key, int scancode, int action, int mods)
 {
+	std::cout << key << std::endl;
 	if(key==GLFW_KEY_ESCAPE && action==GLFW_PRESS)
 	{
 		_mouseLocked = !_mouseLocked;
