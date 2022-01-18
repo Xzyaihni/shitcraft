@@ -41,6 +41,8 @@ public:
 	void update(double timeDelta);
 	
 private:
+	void calculate_active();
+
 	PhysicsController* _physCtl = nullptr;
 };
 

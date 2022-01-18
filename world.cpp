@@ -134,6 +134,7 @@ WorldChunk::WorldChunk()
 
 WorldChunk::WorldChunk(WorldGenerator* wGen, Vec3d<int> pos) : _wGen(wGen), _position(pos)
 {
+	_modelName = WorldChunk::getModelName(_position);
 }
 
 void WorldChunk::chunk_gen()
@@ -267,7 +268,15 @@ void WorldChunk::update_mesh()
 
 void WorldChunk::apply_model()
 {
-	_wGen->_init->_modelMap[WorldChunk::getModelName(_position)] = _chunkModel;
+	_wGen->_init->_modelMap[_modelName] = _chunkModel;
+}
+
+void WorldChunk::remove_model()
+{
+	if(_wGen->_init->_modelMap.count(_modelName)!=0)
+		_wGen->_init->_modelMap.erase(_modelName);
+		
+	_empty = true;
 }
 
 void WorldChunk::update_wall(Direction wall, WorldChunk* checkChunk)

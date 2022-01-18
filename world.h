@@ -129,6 +129,7 @@ public:
 	void update_wall(Direction wall, WorldChunk* checkChunk);
 	
 	void apply_model();
+	void remove_model();
 	
 	void update_states();
 	
@@ -154,6 +155,8 @@ private:
 	std::vector<WorldBlock> _chunkBlocks;
 	
 	YandereModel _chunkModel;
+	std::string _modelName;
+	
 	int _indexOffset;
 	
 	Vec3d<int> _position;

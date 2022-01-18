@@ -1,6 +1,7 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
+#include <cassert>
 
 #include "physics.h"
 
@@ -14,10 +15,9 @@ PhysicsObject::PhysicsObject(PhysicsController* physCtl) : _physCtl(physCtl)
 
 void PhysicsObject::update(double timeDelta)
 {
-	if(_physCtl==nullptr)
-	{
-		throw std::runtime_error("physics controller is null");
-	}
+	assert(_physCtl!=nullptr);
+
+	calculate_active();
 
 	if(!isStatic)
 	{
@@ -39,37 +39,6 @@ void PhysicsObject::update(double timeDelta)
 				position = newPosition;
 			}
 			
-			
-			if(position.x<0)
-			{
-				activeChunkPos.x = (static_cast<int>(position.x)-chunkSize)/chunkSize;
-			}
-			
-			if(position.x>0)
-			{
-				activeChunkPos.x = (static_cast<int>(position.x))/chunkSize;
-			}
-			
-			if(position.y<0)
-			{
-				activeChunkPos.y = (static_cast<int>(position.y)-chunkSize)/chunkSize;
-			}
-			
-			if(position.y>0)
-			{
-				activeChunkPos.y = (static_cast<int>(position.y))/chunkSize;
-			}
-			
-			if(position.z<0)
-			{
-				activeChunkPos.z = (static_cast<int>(position.z)-chunkSize)/chunkSize;
-			}
-			
-			if(position.z>0)
-			{
-				activeChunkPos.z = (static_cast<int>(position.z))/chunkSize;
-			}
-			
 			bool prevNegativeX = velocity.x<0;
 			bool prevNegativeY = velocity.y<0;
 			bool prevNegativeZ = velocity.z<0;
@@ -89,6 +58,42 @@ void PhysicsObject::update(double timeDelta)
 		}
 	}
 }
+
+void PhysicsObject::calculate_active()
+{
+	activeChunkPos = Vec3d<int>{0, 0, 0};
+	
+	if(position.x<0)
+	{
+		activeChunkPos.x = (static_cast<int>(position.x)-chunkSize)/chunkSize;
+	}
+	
+	if(position.x>0)
+	{
+		activeChunkPos.x = (static_cast<int>(position.x))/chunkSize;
+	}
+			
+	if(position.y<0)
+	{
+		activeChunkPos.y = (static_cast<int>(position.y)-chunkSize)/chunkSize;
+	}
+			
+	if(position.y>0)
+	{
+		activeChunkPos.y = (static_cast<int>(position.y))/chunkSize;
+	}
+			
+	if(position.z<0)
+	{
+		activeChunkPos.z = (static_cast<int>(position.z)-chunkSize)/chunkSize;
+	}
+			
+	if(position.z>0)
+	{
+		activeChunkPos.z = (static_cast<int>(position.z))/chunkSize;
+	}
+}
+
 
 PhysicsController::PhysicsController()
 {

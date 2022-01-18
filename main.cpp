@@ -21,12 +21,11 @@
 #include "types.h"
 #include "physics.h"
 
-constexpr int renderRadius = 3;
+constexpr int chunkRadius = 3;
 constexpr int renderDist = 3;
 
-std::mutex globalMutex;
-std::mutex mutexUpdateQueue;
-std::mutex mutexMeshes;
+std::mutex mtxLoadedChunks;
+std::mutex mtxQueueChunks;
 
 class WorldController
 {
@@ -52,6 +51,9 @@ public:
 	
 	void draw_update();
 	void update_func();
+	
+	void set_visibles();
+	void range_remove();
 	
 	void slow_update();
 	
@@ -256,6 +258,8 @@ void WorldController::draw_update()
 	while(!initializeChunks.empty())
 	{
 		Vec3d<int> chunk = initializeChunks.front();
+		if(loadedChunks.count(chunk)==0)
+			continue;
 	
 		std::string chunkName = WorldChunk::getModelName(loadedChunks[chunk].position());
 	
@@ -273,27 +277,19 @@ void WorldController::draw_update()
 	
 	_mainInit.setDrawCamera(&_mainCamera);
 	
+	for(auto& [key, mesh] : _drawMeshes)
 	{
-		std::unique_lock<std::mutex> lock(mutexMeshes);
-		
-		for(auto& [key, mesh] : _drawMeshes)
-		{
-			if(_meshVisible[key])
-				mesh.drawUpdate();
-		}
+		if(_meshVisible[key])
+			mesh.drawUpdate();
 	}
 	
 	
 	_mainInit.switchShaderProgram(1);
 	_mainInit.setDrawCamera(&_guiCamera);
 	
+	for(auto& [name, text] : _textsMap)
 	{
-		std::unique_lock<std::mutex> lock(mutexMeshes);
-		
-		for(auto& [name, text] : _textsMap)
-		{
-			text.drawUpdate();
-		}
+		text.drawUpdate();
 	}
 	
 	glfwSwapBuffers(_mainWindow);
@@ -357,17 +353,127 @@ void WorldController::update_func()
 	
 	_mainCamera.setPosition({_mainCharacter.position.x, _mainCharacter.position.y, _mainCharacter.position.z});
 	
+	set_visibles();
+}
+
+void WorldController::update_walls(UpdateChunk currChunk)
+{
+	Vec3d<int> currPos = currChunk.pos;
+		
+	std::unique_lock<std::mutex> lockL(mtxLoadedChunks);	
+		
+	WorldChunk* currChunkPtr = &loadedChunks[currPos];
+		
+	if(currChunkPtr->empty())
+	{
+		std::unique_lock<std::mutex> lockQ(mtxQueueChunks);
+		loadedChunkPos.push(currChunk);
+		
+		return;
+	}
+	
+	
+	if(loadedChunks.count(currPos)!=0)
+	{
+		if(loadedChunks.count({currPos.x+1, currPos.y, currPos.z})!=0 && currChunk.right)
+		{
+			WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x+1, currPos.y, currPos.z});
+		
+			if(!checkChunkPtr->empty())
+			{
+				currChunk.right = false;
+				currChunkPtr->update_wall(Direction::right, checkChunkPtr);
+			}
+		}
+			
+		if(loadedChunks.count({currPos.x-1, currPos.y, currPos.z})!=0 && currChunk.left)
+		{
+			WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x-1, currPos.y, currPos.z});
+		
+			if(!checkChunkPtr->empty())
+			{
+				currChunk.left = false;
+				currChunkPtr->update_wall(Direction::left, checkChunkPtr);
+			}
+		}
+			
+		if(loadedChunks.count({currPos.x, currPos.y+1, currPos.z})!=0 && currChunk.up)
+		{
+			WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x, currPos.y+1, currPos.z});
+		
+			if(!checkChunkPtr->empty())
+			{
+				currChunk.up = false;
+				currChunkPtr->update_wall(Direction::up, checkChunkPtr);
+			}
+		}
+			
+		if(loadedChunks.count({currPos.x, currPos.y-1, currPos.z})!=0 && currChunk.down)
+		{
+			WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x, currPos.y-1, currPos.z});
+		
+			if(!checkChunkPtr->empty())
+			{
+				currChunk.down = false;
+				currChunkPtr->update_wall(Direction::down, checkChunkPtr);
+			}
+		}
+			
+		if(loadedChunks.count({currPos.x, currPos.y, currPos.z+1})!=0 && currChunk.forward)
+		{
+			WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x, currPos.y, currPos.z+1});
+			
+			if(!checkChunkPtr->empty())
+			{
+				currChunk.forward = false;
+				currChunkPtr->update_wall(Direction::forward, checkChunkPtr);
+			}
+		}
+			
+		if(loadedChunks.count({currPos.x, currPos.y, currPos.z-1})!=0 && currChunk.back)
+		{
+			WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x, currPos.y, currPos.z-1});
+		
+			if(!checkChunkPtr->empty())
+			{
+				currChunk.back = false;
+				currChunkPtr->update_wall(Direction::back, checkChunkPtr);
+			}
+		}
+		
+		currChunkPtr->apply_model();
+			
+		if(currChunk.walls_or())
+		{
+			std::unique_lock<std::mutex> lockQ(mtxQueueChunks);
+			loadedChunkPos.push(currChunk);
+		}
+	}
+}
+
+void WorldController::chunk_loader(Vec3d<int> chunkPos)
+{
+	WorldChunk genChunk = WorldChunk(&_worldGen, chunkPos);
+	genChunk.chunk_gen();
+	
+	{
+		std::unique_lock<std::mutex> lockL(mtxLoadedChunks);	
+		loadedChunks[chunkPos] = std::move(genChunk);
+	}
+		
+	initializeChunks.push(chunkPos);
+	
+	std::unique_lock<std::mutex> lockQ(mtxQueueChunks);
+	loadedChunkPos.push({chunkPos});
+}
+
+void WorldController::set_visibles()
+{
 	for(auto& [chunk, mesh] : _drawMeshes)
 	{
 		Vec3d<int> diffPos = chunk-_mainCharacter.activeChunkPos;
 		
-		if(loadedChunks[chunk].empty())
-		{
-			_meshVisible[chunk] = false;
-			continue;
-		}
-		
-		if((diffPos.x*diffPos.x + diffPos.y*diffPos.y + diffPos.z*diffPos.z) > renderDist*renderDist)
+		if(loadedChunks[chunk].empty() || Vec3d<int>::magnitude(diffPos) > renderDist)
 		{
 			_meshVisible[chunk] = false;
 		} else
@@ -385,117 +491,27 @@ void WorldController::update_func()
 	}
 }
 
-void WorldController::update_walls(UpdateChunk currChunk)
+void WorldController::range_remove()
 {
-	Vec3d<int> currPos = currChunk.pos;
-		
-	WorldChunk* currChunkPtr = &loadedChunks[currPos];
-	
-	if(currChunkPtr->empty())
+	//unloads chunks which are outside of a certain range
+	for(auto& [chunkPos, chunk] : loadedChunks)
 	{
-		std::unique_lock<std::mutex> lock(mutexUpdateQueue);
-	
-		loadedChunkPos.push(currChunk);
+		Vec3d<int> offsetChunk = Vec3d<int>{std::abs(chunkPos.x), std::abs(chunkPos.y), std::abs(chunkPos.z)}
+		- Vec3d<int>{std::abs(_mainCharacter.activeChunkPos.x), std::abs(_mainCharacter.activeChunkPos.y), std::abs(_mainCharacter.activeChunkPos.z)};
 		
-		return;
-	}
-	
-	
-	if(loadedChunks.count(currPos)!=0)
-	{
+		int maxDist = std::max({std::abs(offsetChunk.x), std::abs(offsetChunk.y), std::abs(offsetChunk.z)});
+		if(maxDist>chunkRadius)
 		{
-			std::unique_lock<std::mutex> lock(mutexUpdateQueue);
+			//unload the chunk
+			if(!chunk.empty())
+				chunk.remove_model();
 			
-			if(loadedChunks.count({currPos.x+1, currPos.y, currPos.z})!=0 && currChunk.right)
-			{
-				WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x+1, currPos.y, currPos.z});
+			_drawMeshes.erase(chunkPos);
+			_meshVisible.erase(chunkPos);
 			
-				if(!checkChunkPtr->empty())
-				{
-					currChunk.right = false;
-					currChunkPtr->update_wall(Direction::right, checkChunkPtr);
-				}
-			}
-			
-			if(loadedChunks.count({currPos.x-1, currPos.y, currPos.z})!=0 && currChunk.left)
-			{
-				WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x-1, currPos.y, currPos.z});
-			
-				if(!checkChunkPtr->empty())
-				{
-					currChunk.left = false;
-					currChunkPtr->update_wall(Direction::left, checkChunkPtr);
-				}
-			}
-			
-			if(loadedChunks.count({currPos.x, currPos.y+1, currPos.z})!=0 && currChunk.up)
-			{
-				WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x, currPos.y+1, currPos.z});
-			
-				if(!checkChunkPtr->empty())
-				{
-					currChunk.up = false;
-					currChunkPtr->update_wall(Direction::up, checkChunkPtr);
-				}
-			}
-			
-			if(loadedChunks.count({currPos.x, currPos.y-1, currPos.z})!=0 && currChunk.down)
-			{
-				WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x, currPos.y-1, currPos.z});
-			
-				if(!checkChunkPtr->empty())
-				{
-					currChunk.down = false;
-					currChunkPtr->update_wall(Direction::down, checkChunkPtr);
-				}
-			}
-			
-			if(loadedChunks.count({currPos.x, currPos.y, currPos.z+1})!=0 && currChunk.forward)
-			{
-				WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x, currPos.y, currPos.z+1});
-			
-				if(!checkChunkPtr->empty())
-				{
-					currChunk.forward = false;
-					currChunkPtr->update_wall(Direction::forward, checkChunkPtr);
-				}
-			}
-			
-			if(loadedChunks.count({currPos.x, currPos.y, currPos.z-1})!=0 && currChunk.back)
-			{
-				WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x, currPos.y, currPos.z-1});
-			
-				if(!checkChunkPtr->empty())
-				{
-					currChunk.back = false;
-					currChunkPtr->update_wall(Direction::back, checkChunkPtr);
-				}
-			}
+			std::unique_lock<std::mutex> lockL(mtxLoadedChunks);	
+			loadedChunks.erase(chunkPos);
 		}
-		
-		std::unique_lock<std::mutex> lock2(mutexMeshes);
-	
-		currChunkPtr->apply_model();
-	}
-		
-	std::unique_lock<std::mutex> lock(mutexUpdateQueue);
-
-	if(currChunk.walls_or())
-		loadedChunkPos.push(currChunk);
-}
-
-void WorldController::chunk_loader(Vec3d<int> chunkPos)
-{
-	WorldChunk genChunk = WorldChunk(&_worldGen, chunkPos);
-	genChunk.chunk_gen();
-		
-	{
-		std::unique_lock<std::mutex> lock(mutexUpdateQueue);
-		
-		loadedChunks[chunkPos] = std::move(genChunk);
-		
-		initializeChunks.push(chunkPos);
-		loadedChunkPos.push({chunkPos});
 	}
 }
 
@@ -503,7 +519,7 @@ void WorldController::slow_update()
 {
 	std::map<Vec3d<int>, bool> updateLoaded;
 
-	const int renderDiameter = renderRadius*2;
+	const int renderDiameter = chunkRadius*2;
 
 	for(int x = 0; x < renderDiameter; ++x)
 	{
@@ -511,27 +527,36 @@ void WorldController::slow_update()
 		{
 			for(int z = 0; z < renderDiameter; ++z)
 			{
-				Vec3d<int> checkChunk = _mainCharacter.activeChunkPos + Vec3d<int>{x-renderRadius, y-renderRadius, z-renderRadius};
+				Vec3d<int> checkChunk = _mainCharacter.activeChunkPos + Vec3d<int>{x-chunkRadius, y-chunkRadius, z-chunkRadius};
 				
 				if(loadedChunks.count(checkChunk)==0 && !updateLoaded[checkChunk])
 				{
-					loadedChunks[checkChunk] = WorldChunk();
 					updateLoaded[checkChunk] = true;
-						
+					loadedChunks[checkChunk] = WorldChunk();
+
 					_cGenPool.run(checkChunk);
 				}
 			}
 		}
 	}
-	
-	//update chunk meshes to make the block walls continious across chunks
-	int queueSize = loadedChunkPos.size();
-	for(int i = 0; i<queueSize; ++i)
-	{
-		_cWallPool.run(loadedChunkPos.front());
 
-		loadedChunkPos.pop();
+	//update chunk meshes to make the block walls continious across chunks
+	
+	{
+		std::unique_lock<std::mutex> lockQ(mtxQueueChunks);
+		int queueSize = loadedChunkPos.size();
+		for(int i = 0; i<queueSize; ++i)
+		{
+			//check if not unloaded, then update the walls
+			UpdateChunk topChunk = loadedChunkPos.front();
+			if(loadedChunks.count(topChunk.pos)!=0)
+				_cWallPool.run(std::move(topChunk));
+
+			loadedChunkPos.pop();
+		}
 	}
+	
+	range_remove();
 }
 
 void WorldController::mousepos_update(int x, int y)
@@ -568,7 +593,6 @@ void WorldController::mousepos_update(int x, int y)
 
 void WorldController::keyboard_func(int key, int scancode, int action, int mods)
 {
-	std::cout << key << std::endl;
 	if(key==GLFW_KEY_ESCAPE && action==GLFW_PRESS)
 	{
 		_mouseLocked = !_mouseLocked;
