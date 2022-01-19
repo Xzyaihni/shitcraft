@@ -1,0 +1,36 @@
+#version 330 core
+
+out vec4 fragColor;
+
+in vec3 vertexPosition;
+in vec4 vertexColor;
+in vec2 texCoord;
+
+uniform vec3 fogColor;
+uniform float renderDistance;
+
+uniform vec3 playerPos;
+
+uniform sampler2D userTexture;
+
+vec3 color_interp(vec3 col0, vec3 col1, float interp)
+{
+	return col0+(col1-col0)*interp;
+}
+
+void main()
+{
+	float playerDistance = distance(vertexPosition, playerPos);
+	float visibleDistance = 0;
+	
+	float resizedDistance = renderDistance*10;
+	if(playerDistance>resizedDistance)
+	{
+		visibleDistance = -1+playerDistance/resizedDistance;
+	}
+
+	vec4 tempFragColor = vertexColor * texture(userTexture, texCoord);
+	vec3 interpColor = color_interp(tempFragColor.xyz, fogColor, clamp(visibleDistance, 0, 1));
+
+	fragColor = vec4(interpColor, tempFragColor.w);
+}

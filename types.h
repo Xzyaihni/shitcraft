@@ -5,7 +5,7 @@
 #include <compare>
 #include <ostream>
 
-const int chunkSize = 64;
+const int chunkSize = 32;
 
 enum class Direction {none, left, right, forward, back, down, up};
 

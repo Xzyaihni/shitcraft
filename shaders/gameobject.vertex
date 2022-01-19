@@ -1,0 +1,24 @@
+#version 330 core
+
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec2 aTexCoord;
+layout (location = 2) in vec4 aColor;
+layout (location = 3) in mat4 aModelMat;
+
+uniform mat4 viewMat;
+uniform mat4 projectionMat;
+
+out vec3 vertexPosition;
+out vec4 vertexColor;
+out vec2 texCoord;
+
+void main()
+{	
+	vec4 tempPosition = aModelMat * vec4(aPos, 1.0f);
+	
+	vertexPosition = tempPosition.xyz;
+	vertexColor = aColor;
+	texCoord = aTexCoord;
+	
+	gl_Position = projectionMat * viewMat * tempPosition;
+}

@@ -137,6 +137,7 @@ public:
 	WorldBlock& getBlock(Vec3d<int> pos);
 	
 	bool empty();
+	bool has_transparent();
 	
 	Vec3d<int> position();
 	
@@ -152,7 +153,7 @@ private:
 
 	WorldGenerator* _wGen = nullptr;
 	
-	std::vector<WorldBlock> _chunkBlocks;
+	std::array<WorldBlock, chunkSize*chunkSize*chunkSize> _chunkBlocks;
 	
 	YandereModel _chunkModel;
 	std::string _modelName;

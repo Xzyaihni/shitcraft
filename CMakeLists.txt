@@ -64,7 +64,7 @@ endif()
 
 
 if(${Y_DEBUG})
-	target_link_libraries(${PROJECT_NAME} -pg)
+	target_link_libraries(${PROJECT_NAME} -O1 -pg)
 	
 	if(${Y_SANITIZE})
 		target_link_libraries(${PROJECT_NAME} -fsanitize=address)

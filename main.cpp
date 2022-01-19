@@ -21,8 +21,8 @@
 #include "types.h"
 #include "physics.h"
 
-constexpr int chunkRadius = 3;
-constexpr int renderDist = 3;
+constexpr int chunkRadius = 4;
+constexpr int renderDist = 4;
 
 std::mutex mtxLoadedChunks;
 std::mutex mtxQueueChunks;
@@ -101,8 +101,12 @@ private:
 
 	int _chunksAmount;
 	
-	unsigned _defaultShaderID = 0;
-	unsigned _guiShaderID = 0;
+	unsigned _defaultShaderID = -1;
+	unsigned _gameObjectShaderID = -1;
+	unsigned _guiShaderID = -1;
+	
+	YandereShaderProgram* _shaderGameObjPtr = nullptr;
+	unsigned _shaderPlayerPosLoc = -1;
 	
 	YanderePool _cGenPool;
 	YanderePool _cWallPool;
@@ -176,11 +180,11 @@ WorldController::WorldController()
 
 
 	_worldGen = WorldGenerator(&_mainInit, "block_textures");
-	_worldGen.terrainSmallScale = 2.1f;
-	_worldGen.terrainMidScale = 0.44f;
-	_worldGen.terrainLargeScale = 0.023f;
-	_worldGen.temperatureScale = 0.0111f;
-	_worldGen.humidityScale = 0.0276f;
+	_worldGen.terrainSmallScale = 1.05f;
+	_worldGen.terrainMidScale = 0.22f;
+	_worldGen.terrainLargeScale = 0.012f;
+	_worldGen.temperatureScale = 0.0066f;
+	_worldGen.humidityScale = 0.0133f;
 	
 	unsigned currSeed = time(NULL);
 	_worldGen.changeSeed(currSeed);
@@ -217,7 +221,15 @@ void WorldController::graphics_init()
 	_mainInit.do_glew_init();
 	
 	_defaultShaderID = _mainInit.create_shader_program({"defaultflat.fragment", "defaultflat.vertex"});
+	_gameObjectShaderID = _mainInit.create_shader_program({"gameobject.fragment", "gameobject.vertex"});
 	_guiShaderID = _mainInit.create_shader_program({"text.fragment", "defaultflat.vertex"});
+	
+	_shaderGameObjPtr = _mainInit.shader_program_ptr(_gameObjectShaderID);
+	
+	_shaderPlayerPosLoc = _shaderGameObjPtr->add_vec3("playerPos");
+	_shaderGameObjPtr->set_prop(_shaderGameObjPtr->add_vec3("fogColor"), YVec3{skyColor.r, skyColor.g, skyColor.b});
+	_shaderGameObjPtr->set_prop(_shaderGameObjPtr->add_num("renderDistance"), renderDist);
+	
 	
 	const float textPadding = 10.0f;
 	const float textDistance = 15.0f;
@@ -255,7 +267,7 @@ void WorldController::update_status_texts()
 
 void WorldController::draw_update()
 {
-	_mainInit.set_shader_program(_defaultShaderID);
+	_mainInit.set_shader_program(_gameObjectShaderID);
 
 	glClearColor(skyColor.r, skyColor.g, skyColor.b, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -353,6 +365,9 @@ void WorldController::update_func()
 	}
 	
 	_mainPhysCtl.physics_update(_timeDelta);
+	
+	_shaderGameObjPtr->set_prop(_shaderPlayerPosLoc, YVec3{_mainCharacter.position.x, _mainCharacter.position.y, _mainCharacter.position.z});
+	
 	
 	update_status_texts();
 	
@@ -499,23 +514,28 @@ void WorldController::set_visibles()
 void WorldController::range_remove()
 {
 	//unloads chunks which are outside of a certain range
-	for(auto& [chunkPos, chunk] : loadedChunks)
+	std::unique_lock<std::mutex> lockL(mtxLoadedChunks);
+	
+	std::map<Vec3d<int>, WorldChunk>::iterator it;
+	for(it = loadedChunks.begin(); it != loadedChunks.end();)
 	{
-		Vec3d<int> offsetChunk = Vec3d<int>{std::abs(chunkPos.x), std::abs(chunkPos.y), std::abs(chunkPos.z)}
+		Vec3d<int> offsetChunk = Vec3d<int>{std::abs(it->first.x), std::abs(it->first.y), std::abs(it->first.z)}
 		- Vec3d<int>{std::abs(_mainCharacter.activeChunkPos.x), std::abs(_mainCharacter.activeChunkPos.y), std::abs(_mainCharacter.activeChunkPos.z)};
 		
 		int maxDist = std::max({std::abs(offsetChunk.x), std::abs(offsetChunk.y), std::abs(offsetChunk.z)});
 		if(maxDist>chunkRadius)
 		{
 			//unload the chunk
-			if(!chunk.empty())
-				chunk.remove_model();
+			if(!it->second.empty())
+				it->second.remove_model();
 			
-			_drawMeshes.erase(chunkPos);
-			_meshVisible.erase(chunkPos);
-			
-			std::unique_lock<std::mutex> lockL(mtxLoadedChunks);	
-			loadedChunks.erase(chunkPos);
+			_drawMeshes.erase(it->first);
+			_meshVisible.erase(it->first);
+				
+			it = loadedChunks.erase(it);
+		} else
+		{
+			++it;
 		}
 	}
 }
