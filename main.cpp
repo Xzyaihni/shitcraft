@@ -83,7 +83,7 @@ public:
 	std::queue<Vec3d<int>> initializeChunks;
 	
 private:
-	void updateStatusTexts();
+	void update_status_texts();
 	
 	void update_walls(UpdateChunk currChunk);
 	void chunk_loader(Vec3d<int> chunkPos);
@@ -100,6 +100,9 @@ private:
 	float _pitch = 0;
 
 	int _chunksAmount;
+	
+	unsigned _defaultShaderID = 0;
+	unsigned _guiShaderID = 0;
 	
 	YanderePool _cGenPool;
 	YanderePool _cWallPool;
@@ -143,10 +146,10 @@ WorldController::WorldController()
 	mouseSens = 250.0f;
 
 	_mainInit = YandereInitializer();
-	_mainInit.loadShadersFrom("./shaders");
-	_mainInit.loadTexturesFrom("./textures");
+	_mainInit.load_shaders_from("./shaders");
+	_mainInit.load_textures_from("./textures");
 	
-	_mainInit.loadFont("./fonts/FreeSans.ttf");
+	_mainInit.load_font("./fonts/FreeSans.ttf");
 	
 	_mainCamera = YandereCamera({0, 0, 0}, {0, 0, 1});
 	resize_func(screenWidth, screenHeight);
@@ -155,7 +158,7 @@ WorldController::WorldController()
 	
 	_guiWidth = 1000;
 	_guiHeight = 1000;
-	_guiCamera.createProjection({
+	_guiCamera.create_projection({
 	-_guiWidth,
 	_guiWidth,
 	-_guiHeight,
@@ -169,7 +172,9 @@ WorldController::WorldController()
 	_mainCharacter.floating = true;
 	_mainCharacter.position = {0, 30, 0};
 	_mainPhysCtl.physObjs.push_back(_mainCharacter);
-	
+
+
+
 	_worldGen = WorldGenerator(&_mainInit, "block_textures");
 	_worldGen.terrainSmallScale = 2.1f;
 	_worldGen.terrainMidScale = 0.44f;
@@ -209,24 +214,24 @@ void WorldController::graphics_init()
 	glfwMakeContextCurrent(_mainWindow);
 	
 	glViewport(0, 0, screenWidth, screenHeight);
-	_mainInit.doGlewInit();
+	_mainInit.do_glew_init();
 	
-	_mainInit.createShaderProgram(0, {"defaultflat.fragment", "defaultflat.vertex"});
-	_mainInit.createShaderProgram(1, {"text.fragment", "defaultflat.vertex"});
+	_defaultShaderID = _mainInit.create_shader_program({"defaultflat.fragment", "defaultflat.vertex"});
+	_guiShaderID = _mainInit.create_shader_program({"text.fragment", "defaultflat.vertex"});
 	
 	const float textPadding = 10.0f;
 	const float textDistance = 15.0f;
 	
-	_textsMap["xPos"] = _mainInit.createText("undefined", "FreeSans", 30, 0, 0);
-	float xPosHeight = _textsMap["xPos"].textHeight();
+	_textsMap["xPos"] = _mainInit.create_text("undefined", "FreeSans", 30, 0, 0);
+	float xPosHeight = _textsMap["xPos"].text_height();
 	
 	float textXPos = -_guiWidth+textPadding;
 	
-	_textsMap["xPos"].setPosition(textXPos, _guiHeight-xPosHeight*2-textPadding);
-	_textsMap["yPos"] = _mainInit.createText("undefined", "FreeSans", 30, textXPos, _textsMap["xPos"].getPosition()[1]-xPosHeight*2-textDistance);
-	_textsMap["zPos"] = _mainInit.createText("undefined", "FreeSans", 30, textXPos, _textsMap["yPos"].getPosition()[1]-xPosHeight*2-textDistance);
+	_textsMap["xPos"].set_position(textXPos, _guiHeight-xPosHeight-textPadding);
+	_textsMap["yPos"] = _mainInit.create_text("undefined", "FreeSans", 30, textXPos, _textsMap["xPos"].getPosition()[1]-xPosHeight-textDistance);
+	_textsMap["zPos"] = _mainInit.create_text("undefined", "FreeSans", 30, textXPos, _textsMap["yPos"].getPosition()[1]-xPosHeight-textDistance);
 	
-	updateStatusTexts();
+	update_status_texts();
 	
 	_mainCharacter.activeChunkPos = {0, 0, 0};
 	
@@ -241,16 +246,16 @@ void WorldController::window_terminate()
 	_cWallPool.exit_threads();
 }
 
-void WorldController::updateStatusTexts()
+void WorldController::update_status_texts()
 {
-	_textsMap["xPos"].changeText("x: "+std::to_string(_mainCharacter.position.x));
-	_textsMap["yPos"].changeText("y: "+std::to_string(_mainCharacter.position.y));
-	_textsMap["zPos"].changeText("z: "+std::to_string(_mainCharacter.position.z));
+	_textsMap["xPos"].change_text("x: "+std::to_string(_mainCharacter.position.x));
+	_textsMap["yPos"].change_text("y: "+std::to_string(_mainCharacter.position.y));
+	_textsMap["zPos"].change_text("z: "+std::to_string(_mainCharacter.position.z));
 }
 
 void WorldController::draw_update()
 {
-	_mainInit.switchShaderProgram(0);
+	_mainInit.set_shader_program(_defaultShaderID);
 
 	glClearColor(skyColor.r, skyColor.g, skyColor.b, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -275,21 +280,21 @@ void WorldController::draw_update()
 		initializeChunks.pop();
 	}
 	
-	_mainInit.setDrawCamera(&_mainCamera);
+	_mainInit.set_draw_camera(&_mainCamera);
 	
 	for(auto& [key, mesh] : _drawMeshes)
 	{
 		if(_meshVisible[key])
-			mesh.drawUpdate();
+			mesh.draw_update();
 	}
 	
 	
-	_mainInit.switchShaderProgram(1);
-	_mainInit.setDrawCamera(&_guiCamera);
+	_mainInit.set_shader_program(_guiShaderID);
+	_mainInit.set_draw_camera(&_guiCamera);
 	
 	for(auto& [name, text] : _textsMap)
 	{
-		text.drawUpdate();
+		text.draw_update();
 	}
 	
 	glfwSwapBuffers(_mainWindow);
@@ -347,11 +352,11 @@ void WorldController::update_func()
 		_mainCharacter.sneaking = false;
 	}
 	
-	_mainPhysCtl.physicsUpdate(_timeDelta);
+	_mainPhysCtl.physics_update(_timeDelta);
 	
-	updateStatusTexts();
+	update_status_texts();
 	
-	_mainCamera.setPosition({_mainCharacter.position.x, _mainCharacter.position.y, _mainCharacter.position.z});
+	_mainCamera.set_position({_mainCharacter.position.x, _mainCharacter.position.y, _mainCharacter.position.z});
 	
 	set_visibles();
 }
@@ -480,7 +485,7 @@ void WorldController::set_visibles()
 		{
 			Vec3d<float> checkPosF = Vec3dCVT<float>(chunk)*chunkSize;
 		
-			if(_mainCamera.cubeInFrustum({checkPosF.x, checkPosF.y, checkPosF.z}, chunkSize))
+			if(_mainCamera.cube_in_frustum({checkPosF.x, checkPosF.y, checkPosF.z}, chunkSize))
 			{
 				_meshVisible[chunk] = true;
 			} else
@@ -575,9 +580,9 @@ void WorldController::mousepos_update(int x, int y)
 	//pitch is in radians in a circle
 	_pitch = std::clamp(_pitch, -1.56f, 1.56f);
 	
-	_mainCamera.setRotation(_yaw, _pitch);
+	_mainCamera.set_rotation(_yaw, _pitch);
 	
-	_mainCharacter.directionVec = PhysicsController::calcDir(_yaw, _pitch);
+	_mainCharacter.directionVec = PhysicsController::calc_dir(_yaw, _pitch);
 	
 	if(_mouseLocked)
 	{
@@ -624,7 +629,7 @@ void WorldController::resize_func(int width, int height)
 	screenWidth = width;
 	screenHeight = height;
 	
-	_mainCamera.createProjection(45, width/static_cast<float>(height), {0.001f, 500});
+	_mainCamera.create_projection(45, width/static_cast<float>(height), {0.001f, 500});
 	
 	glViewport(0, 0, width, height);
 }

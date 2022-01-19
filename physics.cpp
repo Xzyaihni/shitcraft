@@ -103,7 +103,7 @@ PhysicsController::PhysicsController(std::map<Vec3d<int>, WorldChunk>* worldChun
 {
 }
 
-void PhysicsController::physicsUpdate(double timeDelta)
+void PhysicsController::physics_update(double timeDelta)
 {
 	std::for_each(physObjs.begin(), physObjs.end(), [timeDelta](auto& obj){obj.get().update(timeDelta);});
 }
@@ -116,7 +116,7 @@ RaycastResult PhysicsController::raycast(Vec3d<float> startPos, Vec3d<float> end
 	return return_result;
 }
 
-Vec3d<float> PhysicsController::calcDir(float yaw, float pitch)
+Vec3d<float> PhysicsController::calc_dir(float yaw, float pitch)
 {
 	return {std::cos(yaw)*std::cos(pitch), std::sin(pitch), std::cos(pitch)*std::sin(yaw)};
 }

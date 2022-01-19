@@ -52,7 +52,7 @@ public:
 	PhysicsController();
 	PhysicsController(std::map<Vec3d<int>, WorldChunk>* worldChunks);
 	
-	void physicsUpdate(double timeDelta);
+	void physics_update(double timeDelta);
 	
 	RaycastResult raycast(Vec3d<float> startPos, Vec3d<float> endPos);
 	
@@ -61,7 +61,7 @@ public:
 	float friction = 4;
 	Vec3d<float> gravity = {0, -1, 0};
 	
-	static Vec3d<float> calcDir(float yaw, float pitch);
+	static Vec3d<float> calc_dir(float yaw, float pitch);
 	
 private:
 	std::map<Vec3d<int>, WorldChunk>* _worldChunks;
