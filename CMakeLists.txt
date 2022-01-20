@@ -19,6 +19,7 @@ set(YANDERELIBS "yanderegllib/glcyan.cpp"
 set(SOURCE_FILES main.cpp
 character.cpp
 world.cpp
+wgen.cpp
 noise.cpp
 inventory.cpp
 physics.cpp

@@ -23,7 +23,9 @@ void main()
 	float playerDistance = distance(vertexPosition, playerPos);
 	float visibleDistance = 0;
 	
-	float resizedDistance = renderDistance*10;
+	int chunkSize = 32;
+	
+	float resizedDistance = renderDistance*chunkSize-chunkSize*2.5f;
 	if(playerDistance>resizedDistance)
 	{
 		visibleDistance = -1+playerDistance/resizedDistance;

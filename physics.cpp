@@ -4,6 +4,7 @@
 #include <cassert>
 
 #include "physics.h"
+#include "world.h"
 
 PhysicsObject::PhysicsObject()
 {
@@ -17,7 +18,7 @@ void PhysicsObject::update(double timeDelta)
 {
 	assert(_physCtl!=nullptr);
 
-	calculate_active();
+	activeChunkPos = WorldChunk::active_chunk(position);
 
 	if(!isStatic)
 	{
@@ -56,41 +57,6 @@ void PhysicsObject::update(double timeDelta)
 				velocity.z = 0;
 
 		}
-	}
-}
-
-void PhysicsObject::calculate_active()
-{
-	activeChunkPos = Vec3d<int>{0, 0, 0};
-	
-	if(position.x<0)
-	{
-		activeChunkPos.x = (static_cast<int>(position.x)-chunkSize)/chunkSize;
-	}
-	
-	if(position.x>0)
-	{
-		activeChunkPos.x = (static_cast<int>(position.x))/chunkSize;
-	}
-			
-	if(position.y<0)
-	{
-		activeChunkPos.y = (static_cast<int>(position.y)-chunkSize)/chunkSize;
-	}
-			
-	if(position.y>0)
-	{
-		activeChunkPos.y = (static_cast<int>(position.y))/chunkSize;
-	}
-			
-	if(position.z<0)
-	{
-		activeChunkPos.z = (static_cast<int>(position.z)-chunkSize)/chunkSize;
-	}
-			
-	if(position.z>0)
-	{
-		activeChunkPos.z = (static_cast<int>(position.z))/chunkSize;
 	}
 }
 

@@ -1,8 +1,6 @@
 #ifndef NOISE_H
 #define NOISE_H
 
-#include <functional>
-
 class NoiseGenerator
 {
 public:
@@ -13,15 +11,14 @@ public:
 	float noise(float x, float y);
 	
 private:
-	static float fast_random(unsigned seed);
+	static unsigned fast_random(unsigned seed);
+	static unsigned fast_hash(float val);
 
 	float vec_gradient(float xH, float xY, float xP, float yP);
 
 	static float smoothstep(float val);
 
 	unsigned _sOffset;
-
-	std::hash<float> _hasher;
 };
 
 #endif

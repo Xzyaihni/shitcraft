@@ -2,31 +2,48 @@
 #include <functional>
 #include <iostream>
 #include <climits>
+#include <cstring>
+#include <random>
 
 #include "noise.h"
 
-NoiseGenerator::NoiseGenerator() : _sOffset(0), _hasher()
+NoiseGenerator::NoiseGenerator()
 {
+	std::mt19937 sGen(1);
+
+	_sOffset = sGen();
 }
 
-NoiseGenerator::NoiseGenerator(unsigned seed) : _sOffset(seed), _hasher()
+NoiseGenerator::NoiseGenerator(unsigned seed)
 {
+	std::mt19937 sGen(seed);
+
+	_sOffset = sGen();
 }
 
-float NoiseGenerator::fast_random(unsigned seed)
+unsigned NoiseGenerator::fast_random(unsigned seed)
 {
 	seed ^= (seed << 13);
-	seed ^= (seed >> 17);
-	seed ^= (seed << 5);
+	seed ^= (seed >> 7);
+	seed ^= (seed << 17);
 
 	return seed;
 }
 
+unsigned NoiseGenerator::fast_hash(float val)
+{
+	static_assert(sizeof(unsigned)==sizeof(val), "type sizes dont match, yikes");
+	
+	unsigned hashed;
+	std::memcpy(&hashed, &val, sizeof(val));
+	return hashed & 0xfffffff8;
+}
+
 float NoiseGenerator::vec_gradient(float xH, float yH, float xP, float yP)
 {
-	int yS = _hasher(yH);
+	int yS = fast_hash(yH);
 
-	float valX = fast_random(_hasher(xH)^((yS<<6)+(yS>>2)))/static_cast<float>(UINT_MAX);
+	float valX = (fast_random((fast_hash(xH) ^ ((yS<<6)+(yS>>2)))) ^ ((_sOffset<<7)+(_sOffset>>3)))/static_cast<float>(UINT_MAX);
 	float valY = std::sqrt(1-valX*valX);
 	
 	return valX*xP+valY*yP;

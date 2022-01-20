@@ -6,8 +6,6 @@
 
 #include "physics.h"
 
-class WorldChunk;
-
 class Character : public PhysicsObject
 {
 public:
