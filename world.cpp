@@ -135,6 +135,8 @@ void WorldChunk::chunk_gen()
 	
 	update_states();
 	update_mesh();
+	
+	apply_model();
 }
 
 void WorldChunk::update_states()
@@ -275,8 +277,6 @@ void WorldChunk::update_mesh()
 		_empty = true;
 		return;
 	}
-	
-	apply_model();
 }
 
 

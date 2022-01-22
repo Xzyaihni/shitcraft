@@ -20,7 +20,6 @@ public:
 	
 	struct UpdateChunk
 	{
-		Vec3d<int> pos;
 		bool right = true;
 		bool left = true;
 		bool up = true;
@@ -29,6 +28,12 @@ public:
 		bool back = true;
 		
 		bool walls_or() {return right || left || up || down || forward || back;};
+	};
+	
+	struct PosWalls
+	{
+		Vec3d<int> chunkPos;
+		UpdateChunk walls;
 	};
 
 
@@ -57,7 +62,7 @@ public:
 
 private:
 	void chunk_loader(Vec3d<int> chunkPos);
-	void update_walls(UpdateChunk currChunk);
+	void update_walls(PosWalls currChunk);
 
 	void init_chunks();
 	
@@ -69,7 +74,7 @@ private:
 	std::map<Vec3d<int>, MeshVisible> _drawMeshes;
 	
 	std::queue<Vec3d<int>> _initializeChunks;
-	std::queue<UpdateChunk> _chunkUpdatePos;
+	std::map<Vec3d<int>, UpdateChunk> _chunkUpdateWalls;
 	std::map<Vec3d<int>, bool> _updateLoaded;
 	
 	int _chunkRadius = 4;
@@ -82,11 +87,11 @@ private:
 namespace wctl_mutex
 {
 	static std::mutex loadedChunks;
-	static std::mutex queueChunks;
+	static std::mutex wallUpdater;
 	static std::mutex initQueue;
 	
 	static YanderePool<void (WorldController::*)(Vec3d<int>), WorldController*, Vec3d<int>> cGenPool;
-	static YanderePool<void (WorldController::*)(WorldController::UpdateChunk), WorldController*, WorldController::UpdateChunk> cWallPool;
+	static YanderePool<void (WorldController::*)(WorldController::PosWalls), WorldController*, WorldController::PosWalls> cWallPool;
 };
 
 #endif
