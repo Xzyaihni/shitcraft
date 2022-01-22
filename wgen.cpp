@@ -2,8 +2,8 @@
 #include <iostream>
 #include <random>
 
-#include "world.h"
 #include "wgen.h"
+#include "world.h"
 
 using namespace WorldTypes;
 
@@ -126,9 +126,9 @@ Vec3d<int> WorldGenerator::get_ground(WorldChunk& checkChunk, int x, int z)
 void WorldGenerator::gen_plants(WorldChunk& genChunk, std::array<ClimatePoint, chunkSize*chunkSize>& climateArr)
 {
 	std::mt19937 sGen(_seed);
-	std::uniform_int_distribution distrib(1, 100);
+	std::uniform_int_distribution distrib(1, 1000);
 	
-	std::uniform_int_distribution plantDistrib(1, 6);
+	std::uniform_int_distribution plantDistrib(1, 8);
 
 	int pointIndex = 0;
 	for(int x = 0; x < chunkSize; ++x)
@@ -139,7 +139,7 @@ void WorldGenerator::gen_plants(WorldChunk& genChunk, std::array<ClimatePoint, c
 			{
 				case Biome::desert:
 				{
-					if(distrib(sGen) < (climateArr[pointIndex].humidity-0.35f)*10)
+					if(distrib(sGen) < (climateArr[pointIndex].humidity-0.10f)*10)
 					{
 						Vec3d<int> groundPos = get_ground(genChunk, x, z);
 					
@@ -147,7 +147,7 @@ void WorldGenerator::gen_plants(WorldChunk& genChunk, std::array<ClimatePoint, c
 							continue;
 						
 						
-						int cactusHeight = plantDistrib(sGen);
+						int cactusHeight = 2+plantDistrib(sGen);
 							
 						for(int i = 0; i < cactusHeight; ++i)
 						{
@@ -160,7 +160,7 @@ void WorldGenerator::gen_plants(WorldChunk& genChunk, std::array<ClimatePoint, c
 				default:
 				case Biome::forest:
 				{
-					if(distrib(sGen) < (climateArr[pointIndex].humidity-0.45f)*20)
+					if(distrib(sGen) < (climateArr[pointIndex].humidity-0.45f)*50)
 					{	
 						Vec3d<int> groundPos = get_ground(genChunk, x, z);
 					
@@ -197,4 +197,12 @@ void WorldGenerator::gen_plants(WorldChunk& genChunk, std::array<ClimatePoint, c
 			}
 		}
 	}
+}
+
+
+void WorldGenerator::place_in_chunk(Vec3d<int> chunkPos, Vec3d<int> blockPos, WorldBlock block, bool replace)
+{
+	std::unique_lock<std::mutex> lockB(_mtxBlockPlace);
+
+	_blockPlaceQueue.push({chunkPos, blockPos, block, replace});
 }

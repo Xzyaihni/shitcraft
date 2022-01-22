@@ -1,62 +1,15 @@
 #ifndef WGEN_H
 #define WGEN_H
 
+#include <mutex>
+#include <queue>
+
 #include <glcyan.h>
 
 #include "noise.h"
 #include "types.h"
-
-
-namespace WorldTypes
-{
-	struct TexPos
-	{
-		int x;
-		int y;
-	};
-	
-	struct ClimatePoint
-	{
-		float temperature;
-		float humidity;
-	};
-
-	enum Biome
-	{
-		forest = 0,
-		desert
-	};
-	
-	enum Block
-	{
-		air = 0,
-		dirt,
-		stone,
-		sand,
-		log,
-		leaf,
-		cactus
-	};
-	
-	struct TextureFace
-	{
-		WorldTypes::TexPos forward;
-		WorldTypes::TexPos back;
-		WorldTypes::TexPos right;
-		WorldTypes::TexPos left;
-		WorldTypes::TexPos up;
-		WorldTypes::TexPos down;
-	};
-	
-	struct BlockInfo
-	{
-		bool grassy = false;
-	};
-	
-	const float blockModelSize = 1.0f/static_cast<float>(chunkSize);
-};
-
-class Loot;
+#include "worldtypes.h"
+#include "wblock.h"
 
 class BlockTexAtlas
 {
@@ -98,6 +51,8 @@ public:
 	
 	Vec3d<int> get_ground(WorldChunk& checkChunk, int x, int z);
 	
+	void place_in_chunk(Vec3d<int> chunkPos, Vec3d<int> blockPos, WorldBlock block, bool replace);
+	
 	float terrainSmallScale = 2;
 	float terrainMidScale = 1;
 	float terrainLargeScale = 0.25f;
@@ -108,6 +63,20 @@ public:
 	std::string atlasName;
 
 protected:
+	struct BlockChunkPos
+	{
+		Vec3d<int> chunkPos;
+		Vec3d<int> blockPos;
+		
+		WorldBlock block;
+		
+		bool replace;
+	};
+	
+	std::mutex _mtxBlockPlace;
+	
+	std::queue<BlockChunkPos> _blockPlaceQueue;
+
 	YandereInitializer* _init;
 	BlockTexAtlas _texAtlas;
 
@@ -116,6 +85,7 @@ protected:
 	unsigned _seed = 1;
 
 	friend class WorldChunk;
+	friend class WorldController;
 };
 
 #endif

@@ -1,0 +1,462 @@
+#include "wctl.h"
+
+WorldController::WorldController(YandereInitializer* init, Character* mainCharacter, YandereCamera* mainCamera) :
+_initer(init), _mainCharacter(mainCharacter), _mainCamera(mainCamera), _empty(false)
+{
+}
+
+void WorldController::create_world(unsigned seed)
+{
+	assert(!_empty);
+	
+	assert(_initer->glew_initialized());
+	
+
+	int wallUpdateThreads = 1;
+	int chunkLoadThreads = std::thread::hardware_concurrency()-wallUpdateThreads-1;
+	
+	wctl_mutex::cGenPool = YanderePool(chunkLoadThreads, &WorldController::chunk_loader, this, Vec3d<int>{0, 0, 0});
+	wctl_mutex::cWallPool = YanderePool(wallUpdateThreads, &WorldController::update_walls, this, UpdateChunk{Vec3d<int>{0, 0, 0}});
+	
+
+	_worldGen = std::make_unique<WorldGenerator>(_initer, "block_textures");
+	_worldGen->terrainSmallScale = 1.05f;
+	_worldGen->terrainMidScale = 0.22f;
+	_worldGen->terrainLargeScale = 0.012f;
+	_worldGen->temperatureScale = 0.136f;
+	_worldGen->humidityScale = 0.073f;
+	
+	_worldGen->seed(seed);
+
+	_worldCreated = true;
+}
+
+
+void WorldController::wait_threads()
+{
+	assert(_worldCreated);
+	
+	wctl_mutex::cGenPool.exit_threads();
+	wctl_mutex::cWallPool.exit_threads();
+}
+
+void WorldController::update_walls(UpdateChunk currChunk)
+{
+	Vec3d<int> currPos = currChunk.pos;	
+			
+	std::unique_lock<std::mutex> lockL(wctl_mutex::loadedChunks);
+	if(loadedChunks.count(currPos)==0)
+	{
+		std::unique_lock<std::mutex> lockQ(wctl_mutex::queueChunks);
+		_chunkUpdatePos.push(currChunk);
+		
+		return;
+	}
+	
+	WorldChunk* currChunkPtr = &loadedChunks[currPos];
+	if(currChunkPtr->empty())
+	{
+		std::unique_lock<std::mutex> lockQ(wctl_mutex::queueChunks);
+		_chunkUpdatePos.push(currChunk);
+		
+		return;
+	}
+	
+	
+	if(loadedChunks.count({currPos.x+1, currPos.y, currPos.z})!=0 && currChunk.right)
+	{
+		WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x+1, currPos.y, currPos.z});
+	
+		if(!checkChunkPtr->empty())
+		{
+			currChunk.right = false;
+			currChunkPtr->update_wall(Direction::right, checkChunkPtr);
+		}
+	}
+		
+	if(loadedChunks.count({currPos.x-1, currPos.y, currPos.z})!=0 && currChunk.left)
+	{
+		WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x-1, currPos.y, currPos.z});
+	
+		if(!checkChunkPtr->empty())
+		{
+			currChunk.left = false;
+			currChunkPtr->update_wall(Direction::left, checkChunkPtr);
+		}
+	}
+		
+	if(loadedChunks.count({currPos.x, currPos.y+1, currPos.z})!=0 && currChunk.up)
+	{
+		WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x, currPos.y+1, currPos.z});
+	
+		if(!checkChunkPtr->empty())
+		{
+			currChunk.up = false;
+			currChunkPtr->update_wall(Direction::up, checkChunkPtr);
+		}
+	}
+		
+	if(loadedChunks.count({currPos.x, currPos.y-1, currPos.z})!=0 && currChunk.down)
+	{
+		WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x, currPos.y-1, currPos.z});
+	
+			if(!checkChunkPtr->empty())
+		{
+			currChunk.down = false;
+			currChunkPtr->update_wall(Direction::down, checkChunkPtr);
+		}
+	}
+			
+	if(loadedChunks.count({currPos.x, currPos.y, currPos.z+1})!=0 && currChunk.forward)
+	{
+		WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x, currPos.y, currPos.z+1});
+		
+		if(!checkChunkPtr->empty())
+		{
+			currChunk.forward = false;
+			currChunkPtr->update_wall(Direction::forward, checkChunkPtr);
+		}
+	}
+			
+	if(loadedChunks.count({currPos.x, currPos.y, currPos.z-1})!=0 && currChunk.back)
+	{
+		WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x, currPos.y, currPos.z-1});
+		
+		if(!checkChunkPtr->empty())
+		{
+			currChunk.back = false;
+			currChunkPtr->update_wall(Direction::back, checkChunkPtr);
+		}
+	}
+	
+	currChunkPtr->apply_model();
+			
+	if(currChunk.walls_or())
+	{
+		std::unique_lock<std::mutex> lockQ(wctl_mutex::queueChunks);
+		_chunkUpdatePos.push(currChunk);
+	}
+}
+
+void WorldController::chunk_loader(Vec3d<int> chunkPos)
+{
+	WorldChunk genChunk = WorldChunk(_worldGen.get(), chunkPos);
+	genChunk.chunk_gen(); 
+	
+	{
+		std::unique_lock<std::mutex> lockL(wctl_mutex::loadedChunks);
+		loadedChunks[chunkPos] = std::move(genChunk);
+	
+	}
+	
+	update_queued();
+	
+	{
+		std::unique_lock<std::mutex> lockI(wctl_mutex::initQueue);
+		_initializeChunks.push(chunkPos);
+	}
+	
+	std::unique_lock<std::mutex> lockQ(wctl_mutex::queueChunks);
+	_chunkUpdatePos.push({chunkPos});
+}
+
+void WorldController::set_visibles()
+{
+	for(auto& [chunk, mesh] : _drawMeshes)
+	{
+		Vec3d<int> diffPos = chunk-_mainCharacter->activeChunkPos;
+		
+		bool currEmpty;
+		{
+			std::unique_lock<std::mutex> lockL(wctl_mutex::loadedChunks);
+			
+			currEmpty = loadedChunks[chunk].empty();
+		}
+		if(currEmpty || Vec3d<int>::magnitude(diffPos) > _renderDist)
+		{
+			mesh.visible = false;
+		} else
+		{
+			Vec3d<float> checkPosF = Vec3dCVT<float>(chunk)*chunkSize;
+		
+			if(_mainCamera->cube_in_frustum({checkPosF.x, checkPosF.y, checkPosF.z}, chunkSize))
+			{
+				mesh.visible = true;
+			} else
+			{
+				mesh.visible = false;
+			}
+		}
+	}
+}
+
+void WorldController::range_remove()
+{
+	//unloads chunks which are outside of a certain range
+	std::unique_lock<std::mutex> lockL(wctl_mutex::loadedChunks);
+	
+	std::map<Vec3d<int>, WorldChunk>::iterator it;
+	for(it = loadedChunks.begin(); it != loadedChunks.end();)
+	{
+		Vec3d<int> offsetChunk = Vec3d<int>{std::abs(it->first.x), std::abs(it->first.y), std::abs(it->first.z)}
+		- Vec3d<int>{std::abs(_mainCharacter->activeChunkPos.x), std::abs(_mainCharacter->activeChunkPos.y), std::abs(_mainCharacter->activeChunkPos.z)};
+		
+		int maxDist = std::max({std::abs(offsetChunk.x), std::abs(offsetChunk.y), std::abs(offsetChunk.z)});
+		if(maxDist>_chunkRadius+1)
+		{
+			//unload the chunk
+			it->second.remove_model();
+			
+			_drawMeshes.erase(it->first);
+			
+			_updateLoaded[it->first] = false;
+				
+			it = loadedChunks.erase(it);
+		} else
+		{
+			++it;
+		}
+	}
+}
+
+
+void WorldController::full_update()
+{
+	assert(_worldCreated);
+
+	const int renderDiameter = _chunkRadius*2;
+
+	{
+		std::unique_lock<std::mutex> lockL(wctl_mutex::loadedChunks);
+		
+		for(int x = 0; x < renderDiameter; ++x)
+		{
+			for(int y = 0; y < renderDiameter; ++y)
+			{
+				for(int z = 0; z < renderDiameter; ++z)
+				{
+					Vec3d<int> checkChunk = _mainCharacter->activeChunkPos + Vec3d<int>{x-_chunkRadius, y-_chunkRadius, z-_chunkRadius};
+					
+					if(!_updateLoaded[checkChunk] && loadedChunks.count(checkChunk)==0)
+					{
+						_updateLoaded[checkChunk] = true;
+
+						wctl_mutex::cGenPool.run(checkChunk);
+					}
+				}
+			}
+		}
+	}
+
+	//update chunk meshes to make the block walls continious across chunks
+	
+	{
+		std::unique_lock<std::mutex> lockQ(wctl_mutex::queueChunks);
+		int queueSize = _chunkUpdatePos.size();
+		for(int i = 0; i<queueSize; ++i)
+		{
+			wctl_mutex::cWallPool.run(_chunkUpdatePos.front());
+
+			_chunkUpdatePos.pop();
+		}
+	}
+	
+	range_remove();
+}
+
+void WorldController::draw_update()
+{
+	init_chunks();
+	
+	for(auto& [key, meshVis] : _drawMeshes)
+	{
+		if(meshVis.visible)
+			meshVis.mesh.draw_update();
+	}
+}
+
+void WorldController::update_queued()
+{
+	std::map<Vec3d<int>, UpdateChunk> chunkToUpdate;
+
+	std::unique_lock<std::mutex> lockB(_worldGen->_mtxBlockPlace);
+	std::unique_lock<std::mutex> lockL(wctl_mutex::loadedChunks);
+
+	int queueSize = _worldGen->_blockPlaceQueue.size();
+	if(queueSize==0)
+		return;
+	
+	for(int i = 0; i < queueSize; ++i)
+	{
+		WorldGenerator::BlockChunkPos bcPos = _worldGen->_blockPlaceQueue.front();
+			
+		if(loadedChunks.count(bcPos.chunkPos)==0)
+		{
+			//can also push to a special map that gets pulled from when loading new chunks
+			//2 lazy 2 do that, doesnt seem worth it
+			_worldGen->_blockPlaceQueue.push(bcPos);
+		} else
+		{	
+			WorldChunk* currChunk = &loadedChunks[bcPos.chunkPos];
+			if(currChunk->empty())
+				currChunk->set_empty(false);
+			
+			WorldBlock* currBlock = &currChunk->block(bcPos.blockPos);
+			if(bcPos.replace || currBlock->blockType==WorldTypes::Block::air)
+			{
+				UpdateChunk* currUpdateChunk;
+				if(chunkToUpdate.count(bcPos.chunkPos)==0)
+				{
+					currUpdateChunk = &chunkToUpdate[bcPos.chunkPos];
+					*currUpdateChunk = UpdateChunk{bcPos.chunkPos, false, false, false, false, false, false};
+				} else
+				{
+					currUpdateChunk = &chunkToUpdate[bcPos.chunkPos];
+				}
+				
+				if(bcPos.blockPos.x==0)
+					currUpdateChunk->left = true;
+					
+				if(bcPos.blockPos.x==chunkSize-1)
+					currUpdateChunk->right = true;
+					
+				if(bcPos.blockPos.y==0)
+					currUpdateChunk->down = true;
+					
+				if(bcPos.blockPos.y==chunkSize-1)
+					currUpdateChunk->up = true;
+				
+				if(bcPos.blockPos.z==0)
+					currUpdateChunk->back = true;
+					
+				if(bcPos.blockPos.z==chunkSize-1)
+					currUpdateChunk->forward = true;
+				
+				
+				*currBlock = bcPos.block;
+			}
+		}
+			
+		_worldGen->_blockPlaceQueue.pop();
+	}
+	
+	
+	std::unique_lock<std::mutex> lockQ(wctl_mutex::queueChunks);
+	
+	for(auto& [chunkPos, state] : chunkToUpdate)
+	{
+		//lol, insanity
+		loadedChunks[chunkPos].update_mesh();
+		loadedChunks[chunkPos].apply_model();
+		
+		_chunkUpdatePos.push({chunkPos});
+		
+		if(state.left && loadedChunks.count({chunkPos.x-1, chunkPos.y, chunkPos.z})!=0)
+		{
+			loadedChunks[{chunkPos.x-1, chunkPos.y, chunkPos.z}].update_mesh();
+			loadedChunks[{chunkPos.x-1, chunkPos.y, chunkPos.z}].apply_model();
+			
+			_chunkUpdatePos.push({chunkPos.x-1, chunkPos.y, chunkPos.z});
+		}
+		
+		if(state.right && loadedChunks.count({chunkPos.x+1, chunkPos.y, chunkPos.z})!=0)
+		{
+			loadedChunks[{chunkPos.x+1, chunkPos.y, chunkPos.z}].update_mesh();
+			loadedChunks[{chunkPos.x+1, chunkPos.y, chunkPos.z}].apply_model();
+			
+			_chunkUpdatePos.push({chunkPos.x+1, chunkPos.y, chunkPos.z});
+		}
+		
+		if(state.up && loadedChunks.count({chunkPos.x, chunkPos.y+1, chunkPos.z})!=0)
+		{
+			loadedChunks[{chunkPos.x, chunkPos.y+1, chunkPos.z}].update_mesh();
+			loadedChunks[{chunkPos.x, chunkPos.y+1, chunkPos.z}].apply_model();
+			
+			_chunkUpdatePos.push({chunkPos.x, chunkPos.y+1, chunkPos.z});
+		}
+		
+		if(state.down && loadedChunks.count({chunkPos.x, chunkPos.y-1, chunkPos.z})!=0)
+		{
+			loadedChunks[{chunkPos.x, chunkPos.y-1, chunkPos.z}].update_mesh();
+			loadedChunks[{chunkPos.x, chunkPos.y-1, chunkPos.z}].apply_model();
+			
+			_chunkUpdatePos.push({chunkPos.x, chunkPos.y-1, chunkPos.z});
+		}
+		
+		if(state.forward && loadedChunks.count({chunkPos.x, chunkPos.y, chunkPos.z+1})!=0)
+		{
+			loadedChunks[{chunkPos.x, chunkPos.y, chunkPos.z+1}].update_mesh();
+			loadedChunks[{chunkPos.x, chunkPos.y, chunkPos.z+1}].apply_model();
+			
+			_chunkUpdatePos.push({chunkPos.x, chunkPos.y, chunkPos.z+1});
+		}
+		
+		if(state.back && loadedChunks.count({chunkPos.x, chunkPos.y, chunkPos.z-1})!=0)
+		{
+			loadedChunks[{chunkPos.x, chunkPos.y, chunkPos.z-1}].update_mesh();
+			loadedChunks[{chunkPos.x, chunkPos.y, chunkPos.z-1}].apply_model();
+			
+			_chunkUpdatePos.push({chunkPos.x, chunkPos.y, chunkPos.z-1});
+		}
+	}
+}
+
+int WorldController::render_dist()
+{
+	return _renderDist;
+}
+
+int WorldController::chunk_radius()
+{
+	return _chunkRadius;
+}
+
+
+void WorldController::init_chunks()
+{
+	assert(_worldCreated);
+
+	int queueSize;
+	{
+		std::unique_lock<std::mutex> lockI(wctl_mutex::initQueue);
+		queueSize = _initializeChunks.size();
+	}
+	
+	for(int i = 0; i < queueSize; ++i)
+	{
+		Vec3d<int> chunk;
+		{
+			std::unique_lock<std::mutex> lockI(wctl_mutex::initQueue);
+			chunk = _initializeChunks.front();
+			
+			_initializeChunks.pop();
+		}
+		
+		YanPosition chunkPos;
+		{
+			std::unique_lock<std::mutex> lockL(wctl_mutex::loadedChunks);	
+			
+			if(loadedChunks.count(chunk)==0)
+				continue;
+			
+			if(loadedChunks[chunk].empty())
+			{
+				std::unique_lock<std::mutex> lockI(wctl_mutex::initQueue);
+				_initializeChunks.push(chunk);
+				continue;
+			}
+		}
+		
+		//casting before multiplying takes more time but allows me to have positions higher than 2 billion (not enough)
+		chunkPos = {static_cast<float>(chunk.x)*chunkSize, 
+		static_cast<float>(chunk.y)*chunkSize, 
+		static_cast<float>(chunk.z)*chunkSize};
+	
+		YanTransforms chunkT{chunkPos, chunkSize, chunkSize, chunkSize};
+		
+		_drawMeshes[chunk] = {YandereObject(_initer, WorldChunk::model_name(chunk), _worldGen->atlasName, chunkT)};
+	}
+	
+	if(queueSize>0)
+		set_visibles();
+}

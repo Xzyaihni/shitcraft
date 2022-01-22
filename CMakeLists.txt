@@ -20,6 +20,8 @@ set(SOURCE_FILES main.cpp
 character.cpp
 world.cpp
 wgen.cpp
+wctl.cpp
+wblock.cpp
 noise.cpp
 inventory.cpp
 physics.cpp

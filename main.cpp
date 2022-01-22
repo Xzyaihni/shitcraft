@@ -13,48 +13,26 @@
 #include <future>
 
 #include <glcyan.h>
-#include <ythreads.h>
 #include <GLFW/glfw3.h>
 
 #include "world.h"
 #include "character.h"
 #include "types.h"
 #include "physics.h"
+#include "wctl.h"
 
-constexpr int chunkRadius = 4;
-constexpr int renderDist = 4;
 
-std::mutex mtxLoadedChunks;
-std::mutex mtxQueueChunks;
-std::mutex mtxInitQueue;
-
-class WorldController
+class GameController
 {
 private:
 	enum YKey {forward = 0, back, right, left,  jump, crouch, LAST};
-	
-	struct UpdateChunk
-	{
-		Vec3d<int> pos;
-		bool right = true;
-		bool left = true;
-		bool up = true;
-		bool down = true;
-		bool forward = true;
-		bool back = true;
-		
-		bool walls_or() {return right || left || up || down || forward || back;};
-	};
 
 public:
-	WorldController();
+	GameController();
 	void graphics_init();
 	
 	void draw_update();
 	void update_func();
-	
-	void set_visibles();
-	void range_remove();
 	
 	void slow_update();
 	
@@ -71,6 +49,7 @@ public:
 	std::vector<int> controlKeys;
 	
 	GLFWwindow* _mainWindow;
+	WorldController worldCtl;
 	
 	YanColor skyColor;
 	
@@ -78,18 +57,8 @@ public:
 	int screenHeight;
 	float mouseSens;
 	
-	std::map<Vec3d<int>, bool> updateLoaded;
-	
-	std::map<Vec3d<int>, WorldChunk> loadedChunks;
-	std::queue<UpdateChunk> loadedChunkPos;
-	
-	std::queue<Vec3d<int>> initializeChunks;
-	
 private:
 	void update_status_texts();
-	
-	void update_walls(UpdateChunk currChunk);
-	void chunk_loader(Vec3d<int> chunkPos);
 
 	double _lastFrameTime;
 	double _timeDelta = 0;
@@ -111,13 +80,6 @@ private:
 	YandereShaderProgram* _shaderGameObjPtr = nullptr;
 	unsigned _shaderPlayerPosLoc = -1;
 	
-	YanderePool _cGenPool;
-	YanderePool _cWallPool;
-
-	std::map<Vec3d<int>, YandereObject> _drawMeshes;
-	std::map<Vec3d<int>, bool> _meshVisible;
-	
-	WorldGenerator _worldGen;
 
 	Character _mainCharacter;
 
@@ -132,9 +94,9 @@ private:
 	float _guiHeight;
 };
 
-std::unique_ptr<WorldController> _mainWorld;
+std::unique_ptr<GameController> _mainWorld;
 
-WorldController::WorldController()
+GameController::GameController()
 {
 	controlKeys = std::vector(YKey::LAST, 0);
 
@@ -146,7 +108,7 @@ WorldController::WorldController()
 	controlKeys[YKey::crouch] = GLFW_KEY_LEFT_CONTROL;
 	
 	
-	skyColor = {0.1f, 0.5f, 0.7f};
+	skyColor = {0.05f, 0.4f, 0.7f};
 
 	screenWidth = 640;
 	screenHeight = 640;
@@ -172,38 +134,21 @@ WorldController::WorldController()
 	_guiHeight}, {0, 2});
 	
 	
-	_mainPhysCtl = PhysicsController(&loadedChunks);
+	worldCtl = WorldController(&_mainInit, &_mainCharacter, &_mainCamera);
+	
+	_mainPhysCtl = PhysicsController(&worldCtl.loadedChunks);
 	
 	_mainCharacter = Character(&_mainPhysCtl);
 	_mainCharacter.moveSpeed = 1.5f;
 	_mainCharacter.floating = true;
-	_mainCharacter.position = {0, 30, 0};
+	_mainCharacter.position = {500, 30, 1200};
 	_mainPhysCtl.physObjs.push_back(_mainCharacter);
-
-
-
-	_worldGen = WorldGenerator(&_mainInit, "block_textures");
-	_worldGen.terrainSmallScale = 1.05f;
-	_worldGen.terrainMidScale = 0.22f;
-	_worldGen.terrainLargeScale = 0.012f;
-	_worldGen.temperatureScale = 0.136f;
-	_worldGen.humidityScale = 0.073f;
 	
-	unsigned currSeed = time(NULL);
-	_worldGen.seed(currSeed);
-	std::cout << "world seed: " << currSeed << std::endl;
-	
-	
-	const int wallUpdateThreads = 1;
-	const int chunkLoadThreads = std::thread::hardware_concurrency()-wallUpdateThreads-1;
-	
-	_cGenPool = YanderePool(chunkLoadThreads, &WorldController::chunk_loader, this, Vec3d<int>{0, 0, 0});
-	_cWallPool = YanderePool(wallUpdateThreads, &WorldController::update_walls, this, UpdateChunk{Vec3d<int>{0, 0, 0}});
 	
 	mousepos_update(_lastMouseX, _lastMouseY);
 }
 
-void WorldController::graphics_init()
+void GameController::graphics_init()
 {
 	if(!glfwInit())
 	{
@@ -223,6 +168,12 @@ void WorldController::graphics_init()
 	glViewport(0, 0, screenWidth, screenHeight);
 	_mainInit.do_glew_init();
 	
+	
+	unsigned currSeed = time(NULL);
+	worldCtl.create_world(currSeed);	
+	std::cout << "world seed: " << currSeed << std::endl;
+	
+	
 	_defaultShaderID = _mainInit.create_shader_program({"defaultflat.fragment", "defaultflat.vertex"});
 	_gameObjectShaderID = _mainInit.create_shader_program({"gameobject.fragment", "gameobject.vertex"});
 	_guiShaderID = _mainInit.create_shader_program({"text.fragment", "defaultflat.vertex"});
@@ -231,7 +182,7 @@ void WorldController::graphics_init()
 	
 	_shaderPlayerPosLoc = _shaderGameObjPtr->add_vec3("playerPos");
 	_shaderGameObjPtr->set_prop(_shaderGameObjPtr->add_vec3("fogColor"), YVec3{skyColor.r, skyColor.g, skyColor.b});
-	_shaderGameObjPtr->set_prop(_shaderGameObjPtr->add_num("renderDistance"), renderDist);
+	_shaderGameObjPtr->set_prop(_shaderGameObjPtr->add_num("renderDistance"), worldCtl.render_dist());
 	
 	
 	const float textPadding = 10.0f;
@@ -253,80 +204,31 @@ void WorldController::graphics_init()
 	_lastFrameTime = glfwGetTime();
 }
 
-void WorldController::window_terminate()
+void GameController::window_terminate()
 {
 	glfwDestroyWindow(_mainWindow);
 	
-	_cGenPool.exit_threads();
-	_cWallPool.exit_threads();
+	worldCtl.wait_threads();
 }
 
-void WorldController::update_status_texts()
+void GameController::update_status_texts()
 {
 	_textsMap["xPos"].change_text("x: "+std::to_string(_mainCharacter.position.x));
 	_textsMap["yPos"].change_text("y: "+std::to_string(_mainCharacter.position.y));
 	_textsMap["zPos"].change_text("z: "+std::to_string(_mainCharacter.position.z));
 }
 
-void WorldController::draw_update()
+void GameController::draw_update()
 {
 	_mainInit.set_shader_program(_gameObjectShaderID);
 
 	glClearColor(skyColor.r, skyColor.g, skyColor.b, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	
-	
-	int queueSize;
-	{
-		std::unique_lock<std::mutex> lockI(mtxInitQueue);
-		queueSize = initializeChunks.size();
-	}
-	
-	for(int i = 0; i < queueSize; ++i)
-	{
-		Vec3d<int> chunk;
-		{
-			std::unique_lock<std::mutex> lockI(mtxInitQueue);
-			chunk = initializeChunks.front();
-			
-			initializeChunks.pop();
-		}
-		
-		YanPosition chunkPos;
-		{
-			std::unique_lock<std::mutex> lockL(mtxLoadedChunks);	
-			
-			if(loadedChunks.count(chunk)==0)
-				continue;
-			
-			if(loadedChunks[chunk].empty())
-			{
-				std::unique_lock<std::mutex> lockI(mtxInitQueue);
-				initializeChunks.push(chunk);
-				continue;
-			}
-		}
-		
-		//casting before multiplying takes more time but allows me to have positions higher than 2 billion (not enough)
-		chunkPos = {static_cast<float>(chunk.x)*chunkSize, 
-		static_cast<float>(chunk.y)*chunkSize, 
-		static_cast<float>(chunk.z)*chunkSize};
-	
-		YanTransforms chunkT{chunkPos, chunkSize, chunkSize, chunkSize};
-		
-		_drawMeshes[chunk] = YandereObject(&_mainInit, WorldChunk::model_name(chunk), _worldGen.atlasName, chunkT);
-	}
-	
-	if(queueSize>0)
-		set_visibles();
+
 	
 	_mainInit.set_draw_camera(&_mainCamera);
 	
-	for(auto& [key, mesh] : _drawMeshes)
-	{
-		if(_meshVisible[key])
-			mesh.draw_update();
-	}
+	worldCtl.draw_update();
 	
 	
 	_mainInit.set_shader_program(_guiShaderID);
@@ -340,7 +242,7 @@ void WorldController::draw_update()
 	glfwSwapBuffers(_mainWindow);
 }
 
-void WorldController::update_func()
+void GameController::update_func()
 {
 	_timeDelta = (glfwGetTime()-_lastFrameTime)*10;
 	_lastFrameTime = glfwGetTime();
@@ -401,220 +303,16 @@ void WorldController::update_func()
 	
 	_mainCamera.set_position({_mainCharacter.position.x, _mainCharacter.position.y, _mainCharacter.position.z});
 	
-	set_visibles();
+	worldCtl.set_visibles();
 }
 
-void WorldController::update_walls(UpdateChunk currChunk)
+
+void GameController::slow_update()
 {
-	Vec3d<int> currPos = currChunk.pos;	
-			
-	std::unique_lock<std::mutex> lockL(mtxLoadedChunks);
-	if(loadedChunks.count(currPos)==0)
-	{
-		std::unique_lock<std::mutex> lockQ(mtxQueueChunks);
-		loadedChunkPos.push(currChunk);
-		
-		return;
-	}
-	
-	WorldChunk* currChunkPtr = &loadedChunks[currPos];
-	if(currChunkPtr->empty())
-	{
-		std::unique_lock<std::mutex> lockQ(mtxQueueChunks);
-		loadedChunkPos.push(currChunk);
-		
-		return;
-	}
-	
-	
-	if(loadedChunks.count({currPos.x+1, currPos.y, currPos.z})!=0 && currChunk.right)
-	{
-		WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x+1, currPos.y, currPos.z});
-	
-		if(!checkChunkPtr->empty())
-		{
-			currChunk.right = false;
-			currChunkPtr->update_wall(Direction::right, checkChunkPtr);
-		}
-	}
-		
-	if(loadedChunks.count({currPos.x-1, currPos.y, currPos.z})!=0 && currChunk.left)
-	{
-		WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x-1, currPos.y, currPos.z});
-	
-		if(!checkChunkPtr->empty())
-		{
-			currChunk.left = false;
-			currChunkPtr->update_wall(Direction::left, checkChunkPtr);
-		}
-	}
-		
-	if(loadedChunks.count({currPos.x, currPos.y+1, currPos.z})!=0 && currChunk.up)
-	{
-		WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x, currPos.y+1, currPos.z});
-	
-		if(!checkChunkPtr->empty())
-		{
-			currChunk.up = false;
-			currChunkPtr->update_wall(Direction::up, checkChunkPtr);
-		}
-	}
-		
-	if(loadedChunks.count({currPos.x, currPos.y-1, currPos.z})!=0 && currChunk.down)
-	{
-		WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x, currPos.y-1, currPos.z});
-	
-			if(!checkChunkPtr->empty())
-		{
-			currChunk.down = false;
-			currChunkPtr->update_wall(Direction::down, checkChunkPtr);
-		}
-	}
-			
-	if(loadedChunks.count({currPos.x, currPos.y, currPos.z+1})!=0 && currChunk.forward)
-	{
-		WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x, currPos.y, currPos.z+1});
-		
-		if(!checkChunkPtr->empty())
-		{
-			currChunk.forward = false;
-			currChunkPtr->update_wall(Direction::forward, checkChunkPtr);
-		}
-	}
-			
-	if(loadedChunks.count({currPos.x, currPos.y, currPos.z-1})!=0 && currChunk.back)
-	{
-		WorldChunk* checkChunkPtr = &loadedChunks.at({currPos.x, currPos.y, currPos.z-1});
-		
-		if(!checkChunkPtr->empty())
-		{
-			currChunk.back = false;
-			currChunkPtr->update_wall(Direction::back, checkChunkPtr);
-		}
-	}
-	
-	currChunkPtr->apply_model();
-			
-	if(currChunk.walls_or())
-	{
-		std::unique_lock<std::mutex> lockQ(mtxQueueChunks);
-		loadedChunkPos.push(currChunk);
-	}
+	worldCtl.full_update();
 }
 
-void WorldController::chunk_loader(Vec3d<int> chunkPos)
-{
-	WorldChunk genChunk = WorldChunk(&_worldGen, chunkPos);
-	genChunk.chunk_gen(); 
-	
-	{
-		std::unique_lock<std::mutex> lockL(mtxLoadedChunks);
-		loadedChunks[chunkPos] = std::move(genChunk);
-	}
-	
-	{
-		std::unique_lock<std::mutex> lockI(mtxInitQueue);
-		initializeChunks.push(chunkPos);
-	}
-	
-	std::unique_lock<std::mutex> lockQ(mtxQueueChunks);
-	loadedChunkPos.push({chunkPos});
-}
-
-void WorldController::set_visibles()
-{
-	for(auto& [chunk, mesh] : _drawMeshes)
-	{
-		Vec3d<int> diffPos = chunk-_mainCharacter.activeChunkPos;
-		
-		if(loadedChunks[chunk].empty() || Vec3d<int>::magnitude(diffPos) > renderDist)
-		{
-			_meshVisible[chunk] = false;
-		} else
-		{
-			Vec3d<float> checkPosF = Vec3dCVT<float>(chunk)*chunkSize;
-		
-			if(_mainCamera.cube_in_frustum({checkPosF.x, checkPosF.y, checkPosF.z}, chunkSize))
-			{
-				_meshVisible[chunk] = true;
-			} else
-			{
-				_meshVisible[chunk] = false;
-			}
-		}
-	}
-}
-
-void WorldController::range_remove()
-{
-	//unloads chunks which are outside of a certain range
-	std::unique_lock<std::mutex> lockL(mtxLoadedChunks);
-	
-	std::map<Vec3d<int>, WorldChunk>::iterator it;
-	for(it = loadedChunks.begin(); it != loadedChunks.end();)
-	{
-		Vec3d<int> offsetChunk = Vec3d<int>{std::abs(it->first.x), std::abs(it->first.y), std::abs(it->first.z)}
-		- Vec3d<int>{std::abs(_mainCharacter.activeChunkPos.x), std::abs(_mainCharacter.activeChunkPos.y), std::abs(_mainCharacter.activeChunkPos.z)};
-		
-		int maxDist = std::max({std::abs(offsetChunk.x), std::abs(offsetChunk.y), std::abs(offsetChunk.z)});
-		if(maxDist>chunkRadius+1)
-		{
-			//unload the chunk
-			if(!it->second.empty())
-				it->second.remove_model();
-			
-			_drawMeshes.erase(it->first);
-			_meshVisible.erase(it->first);
-			
-			updateLoaded[it->first] = false;
-				
-			it = loadedChunks.erase(it);
-		} else
-		{
-			++it;
-		}
-	}
-}
-
-void WorldController::slow_update()
-{
-	const int renderDiameter = chunkRadius*2;
-
-	for(int x = 0; x < renderDiameter; ++x)
-	{
-		for(int y = 0; y < renderDiameter; ++y)
-		{
-			for(int z = 0; z < renderDiameter; ++z)
-			{
-				Vec3d<int> checkChunk = _mainCharacter.activeChunkPos + Vec3d<int>{x-chunkRadius, y-chunkRadius, z-chunkRadius};
-				
-				if(!updateLoaded[checkChunk] && loadedChunks.count(checkChunk)==0)
-				{
-					updateLoaded[checkChunk] = true;
-
-					_cGenPool.run(checkChunk);
-				}
-			}
-		}
-	}
-
-	//update chunk meshes to make the block walls continious across chunks
-	
-	{
-		std::unique_lock<std::mutex> lockQ(mtxQueueChunks);
-		int queueSize = loadedChunkPos.size();
-		for(int i = 0; i<queueSize; ++i)
-		{
-			_cWallPool.run(loadedChunkPos.front());
-
-			loadedChunkPos.pop();
-		}
-	}
-	
-	range_remove();
-}
-
-void WorldController::mousepos_update(int x, int y)
+void GameController::mousepos_update(int x, int y)
 {
 	_yaw += (x-_lastMouseX)/mouseSens;
 	_pitch -= (y-_lastMouseY)/mouseSens;
@@ -646,7 +344,7 @@ void WorldController::mousepos_update(int x, int y)
 	}
 }
 
-void WorldController::keyboard_func(int key, int scancode, int action, int mods)
+void GameController::keyboard_func(int key, int scancode, int action, int mods)
 {
 	if(key==GLFW_KEY_ESCAPE && action==GLFW_PRESS)
 	{
@@ -666,7 +364,7 @@ void WorldController::keyboard_func(int key, int scancode, int action, int mods)
 	}
 }
 
-void WorldController::mouse_func(int button, int action, int mods)
+void GameController::mouse_func(int button, int action, int mods)
 {
 	if(button==GLFW_MOUSE_BUTTON_LEFT && action==GLFW_PRESS)
 	{
@@ -674,7 +372,7 @@ void WorldController::mouse_func(int button, int action, int mods)
 	}
 }
 
-void WorldController::resize_func(int width, int height)
+void GameController::resize_func(int width, int height)
 {
 	screenWidth = width;
 	screenHeight = height;
@@ -711,7 +409,7 @@ void framebuffer_resize_callback(GLFWwindow* window, int width, int height)
 
 int main(int argc, char* argv[])
 {	
-	_mainWorld = std::make_unique<WorldController>();
+	_mainWorld = std::make_unique<GameController>();
 	_mainWorld->graphics_init();
 	
 	glfwSetInputMode(_mainWorld->_mainWindow, GLFW_STICKY_KEYS, GLFW_TRUE);
