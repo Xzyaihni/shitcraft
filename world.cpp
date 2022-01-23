@@ -85,7 +85,6 @@ void WorldChunk::chunk_gen()
 		update_states();
 		
 		_chunkModel = YandereModel();
-		apply_model();
 		
 		return;
 	}
@@ -135,8 +134,6 @@ void WorldChunk::chunk_gen()
 	
 	update_states();
 	update_mesh();
-	
-	apply_model();
 }
 
 void WorldChunk::update_states()

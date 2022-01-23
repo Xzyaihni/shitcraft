@@ -131,12 +131,13 @@ void WorldController::update_walls(PosWalls currChunk)
 void WorldController::chunk_loader(Vec3d<int> chunkPos)
 {
 	WorldChunk genChunk = WorldChunk(_worldGen.get(), chunkPos);
-	genChunk.chunk_gen(); 
+	genChunk.chunk_gen();
 	
 	{
 		std::unique_lock<std::mutex> lockL(wctl_mutex::loadedChunks);
+		
+		genChunk.apply_model();
 		loadedChunks[chunkPos] = std::move(genChunk);
-	
 	}
 	
 	update_queued();
