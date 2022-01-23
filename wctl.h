@@ -77,8 +77,8 @@ private:
 	std::map<Vec3d<int>, UpdateChunk> _chunkUpdateWalls;
 	std::map<Vec3d<int>, bool> _updateLoaded;
 	
-	int _chunkRadius = 4;
-	int _renderDist = 4;
+	int _chunkRadius = 6;
+	int _renderDist = 5;
 	
 	bool _worldCreated = false;
 	bool _empty = true;

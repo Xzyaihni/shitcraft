@@ -51,7 +51,7 @@ public:
 	
 	Vec3d<int> get_ground(WorldChunk& checkChunk, int x, int z);
 	
-	void place_in_chunk(Vec3d<int> chunkPos, Vec3d<int> blockPos, WorldBlock block, bool replace);
+	void place_in_chunk(Direction callChunkSide, Vec3d<int> chunkPos, Vec3d<int> blockPos, WorldBlock block, bool replace);
 	
 	float terrainSmallScale = 2;
 	float terrainMidScale = 1;
@@ -65,6 +65,7 @@ public:
 protected:
 	struct BlockChunkPos
 	{
+		Direction callChunkSide;
 		Vec3d<int> chunkPos;
 		Vec3d<int> blockPos;
 		

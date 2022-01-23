@@ -156,7 +156,29 @@ void WorldChunk::shared_place(Vec3d<int> position, WorldBlock block, bool replac
 		Vec3d<int> placeChunk = active_chunk(position);
 		Vec3d<int> newPos = position-placeChunk*chunkSize;
 		
-		_wGen->place_in_chunk(_position+placeChunk, newPos, block, replace);
+		Direction currSide;
+		
+		bool found = false;
+		
+		if(!found && position.x<0)
+			currSide = Direction::right;
+			
+		if(!found && position.y<0)
+			currSide = Direction::up;
+			
+		if(!found && position.z<0)
+			currSide = Direction::forward;
+			
+		if(!found && position.x>(chunkSize-1))
+			currSide = Direction::left;
+			
+		if(!found && position.y>(chunkSize-1))
+			currSide = Direction::down;
+			
+		if(!found && position.z>(chunkSize-1))
+			currSide = Direction::back;
+		
+		_wGen->place_in_chunk(currSide, _position+placeChunk, newPos, block, replace);
 	} else
 	{
 		if(replace || this->block(position).blockType==Block::air)

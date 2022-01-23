@@ -21,7 +21,7 @@ vec3 color_interp(vec3 col0, vec3 col1, float interp)
 void main()
 {
 	vec4 tempFragColor = vertexColor * texture(userTexture, texCoord);
-	
+
 	if(tempFragColor.a<0.05f)
 	{
 		discard;
@@ -32,10 +32,12 @@ void main()
 	
 	int chunkSize = 32;
 	
-	float resizedDistance = renderDistance*chunkSize-chunkSize*2.5f;
-	if(playerDistance>resizedDistance)
+	float maxDist = renderDistance*chunkSize-chunkSize*2;
+	
+	
+	if(playerDistance>maxDist)
 	{
-		visibleDistance = -1+playerDistance/resizedDistance;
+		visibleDistance = (playerDistance/maxDist-1)*2;
 	}
 	
 	vec3 interpColor = color_interp(tempFragColor.xyz, fogColor, clamp(visibleDistance, 0, 1));

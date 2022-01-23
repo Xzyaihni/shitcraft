@@ -200,9 +200,9 @@ void WorldGenerator::gen_plants(WorldChunk& genChunk, std::array<ClimatePoint, c
 }
 
 
-void WorldGenerator::place_in_chunk(Vec3d<int> chunkPos, Vec3d<int> blockPos, WorldBlock block, bool replace)
+void WorldGenerator::place_in_chunk(Direction callChunkSide, Vec3d<int> chunkPos, Vec3d<int> blockPos, WorldBlock block, bool replace)
 {
 	std::unique_lock<std::mutex> lockB(_mtxBlockPlace);
 
-	_blockPlaceQueue.push({chunkPos, blockPos, block, replace});
+	_blockPlaceQueue.push({callChunkSide, chunkPos, blockPos, block, replace});
 }

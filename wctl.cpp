@@ -136,11 +136,14 @@ void WorldController::chunk_loader(Vec3d<int> chunkPos)
 	{
 		std::unique_lock<std::mutex> lockL(wctl_mutex::loadedChunks);
 		
-		genChunk.apply_model();
+		if(!genChunk.empty())
+		{
+			update_queued();
+			genChunk.apply_model();
+		}
+		
 		loadedChunks[chunkPos] = std::move(genChunk);
 	}
-	
-	update_queued();
 	
 	{
 		std::unique_lock<std::mutex> lockI(wctl_mutex::initQueue);
@@ -272,7 +275,6 @@ void WorldController::update_queued()
 	std::map<Vec3d<int>, UpdateChunk> chunkToUpdate;
 
 	std::unique_lock<std::mutex> lockB(_worldGen->_mtxBlockPlace);
-	std::unique_lock<std::mutex> lockL(wctl_mutex::loadedChunks);
 
 	int queueSize = _worldGen->_blockPlaceQueue.size();
 	if(queueSize==0)
@@ -307,22 +309,22 @@ void WorldController::update_queued()
 				}
 				
 				if(bcPos.blockPos.x==0)
-					currUpdateChunk->left = true;
+					currUpdateChunk->left = true && bcPos.callChunkSide!=Direction::left;
 					
 				if(bcPos.blockPos.x==chunkSize-1)
-					currUpdateChunk->right = true;
+					currUpdateChunk->right = true && bcPos.callChunkSide!=Direction::right;
 					
 				if(bcPos.blockPos.y==0)
-					currUpdateChunk->down = true;
+					currUpdateChunk->down = true && bcPos.callChunkSide!=Direction::down;
 					
 				if(bcPos.blockPos.y==chunkSize-1)
-					currUpdateChunk->up = true;
+					currUpdateChunk->up = true && bcPos.callChunkSide!=Direction::up;
 				
 				if(bcPos.blockPos.z==0)
-					currUpdateChunk->back = true;
+					currUpdateChunk->back = true && bcPos.callChunkSide!=Direction::back;
 					
 				if(bcPos.blockPos.z==chunkSize-1)
-					currUpdateChunk->forward = true;
+					currUpdateChunk->forward = true && bcPos.callChunkSide!=Direction::forward;
 				
 				
 				*currBlock = bcPos.block;
