@@ -62,7 +62,7 @@ private:
 	
 	std::array<WorldBlock, chunkSize*chunkSize*chunkSize> _chunkBlocks;
 	
-	YandereModel _chunkModel;
+	YandereModel _chunkModel = YandereModel();
 	std::string _modelName;
 	
 	unsigned _indexOffset;
