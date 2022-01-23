@@ -49,7 +49,7 @@ add_custom_target(folder_files
 ${CMAKE_COMMAND}
 -D SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
 -D DESTINATION_DIR=${CMAKE_CURRENT_BINARY_DIR}
--P ../CopyFolders.cmake
+-P ${PROJECT_SOURCE_DIR}/CopyFolders.cmake
 COMMENT "copying asset files" VERBATIM
 )
 
