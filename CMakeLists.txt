@@ -6,6 +6,7 @@ option(Y_DEBUG "build in debug mode" "OFF")
 option(Y_SANITIZE "build with address sanitizer" "OFF")
 option(Y_CROSSCOMPILEW "cross compile on linux for windows" "OFF")
 set(Y_GLMPATH "/home/yanyana/cppPackages/glm" CACHE FILEPATH "path to glm library")
+set(Y_INCLUDE_DIR "./" CACHE FILEPATH "custom include directory")
 
 if(${Y_CROSSCOMPILEW})
 	set(CMAKE_CXX_COMPILER i686-w64-mingw32-g++)
@@ -34,7 +35,9 @@ else()
 	set(CMAKE_BUILD_TYPE Release)
 endif()
 
-include_directories(${PROJECT_SOURCE_DIR}, "${PROJECT_SOURCE_DIR}/yanderegllib")
+include_directories(${Y_INCLUDE_DIR}
+${PROJECT_SOURCE_DIR}
+"${PROJECT_SOURCE_DIR}/yanderegllib")
 
 find_package(Threads REQUIRED)
 find_package(TBB REQUIRED)
