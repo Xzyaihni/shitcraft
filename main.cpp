@@ -63,6 +63,10 @@ private:
 	double _lastFrameTime;
 	double _timeDelta = 0;
 	
+	float _secondCounter = 1;
+	int _fps = 0;
+	int _displayFps = 0;
+	
 	int _lastMouseX = 0;
 	int _lastMouseY = 0;
 
@@ -139,7 +143,8 @@ GameController::GameController()
 	_mainPhysCtl = PhysicsController(&worldCtl.loadedChunks);
 	
 	_mainCharacter = Character(&_mainPhysCtl);
-	_mainCharacter.moveSpeed = 1.5f;
+	_mainCharacter.moveSpeed = 100;
+	_mainCharacter.mass = 50;
 	_mainCharacter.floating = true;
 	_mainCharacter.position = {500, 30, 1200};
 	_mainPhysCtl.physObjs.push_back(_mainCharacter);
@@ -197,6 +202,8 @@ void GameController::graphics_init()
 	_textsMap["yPos"] = _mainInit.create_text("undefined", "FreeSans", 30, textXPos, _textsMap["xPos"].getPosition()[1]-xPosHeight-textDistance);
 	_textsMap["zPos"] = _mainInit.create_text("undefined", "FreeSans", 30, textXPos, _textsMap["yPos"].getPosition()[1]-xPosHeight-textDistance);
 	
+	_textsMap["fps"] = _mainInit.create_text("undefined", "FreeSans", 30, textXPos, _textsMap["zPos"].getPosition()[1]-xPosHeight*2-textDistance);
+	
 	update_status_texts();
 	
 	_mainCharacter.activeChunkPos = {0, 0, 0};
@@ -216,6 +223,8 @@ void GameController::update_status_texts()
 	_textsMap["xPos"].change_text("x: "+std::to_string(_mainCharacter.position.x));
 	_textsMap["yPos"].change_text("y: "+std::to_string(_mainCharacter.position.y));
 	_textsMap["zPos"].change_text("z: "+std::to_string(_mainCharacter.position.z));
+	
+	_textsMap["fps"].change_text("fps: "+std::to_string(_displayFps));
 }
 
 void GameController::draw_update()
@@ -244,42 +253,55 @@ void GameController::draw_update()
 
 void GameController::update_func()
 {
-	_timeDelta = (glfwGetTime()-_lastFrameTime)*10;
+	_timeDelta = (glfwGetTime()-_lastFrameTime);
 	_lastFrameTime = glfwGetTime();
+	
+	_secondCounter -= _timeDelta;
+	++_fps;
+	
+	if(_secondCounter<=0)
+	{
+		_displayFps = _fps;
+		_secondCounter = 1;
+		_fps = 0;
+	}
 
+	Vec3d<float> currAccel = {0, 0, 0};
 	if(glfwGetKey(_mainWindow, controlKeys[YKey::forward]))
 	{
-		_mainCharacter.velocity.z += std::sin(_yaw) * _mainCharacter.moveSpeed*_timeDelta;
-		_mainCharacter.velocity.x += std::cos(_yaw) * _mainCharacter.moveSpeed*_timeDelta;
+		currAccel.z += std::sin(_yaw);
+		currAccel.x += std::cos(_yaw);
 	}
 	if(glfwGetKey(_mainWindow, controlKeys[YKey::back]))
 	{
-		_mainCharacter.velocity.z -= std::sin(_yaw) * _mainCharacter.moveSpeed*_timeDelta;
-		_mainCharacter.velocity.x -= std::cos(_yaw) * _mainCharacter.moveSpeed*_timeDelta;
+		currAccel.z -= std::sin(_yaw);
+		currAccel.x -= std::cos(_yaw);
 	}
 	if(glfwGetKey(_mainWindow, controlKeys[YKey::right]))
 	{
-		_mainCharacter.velocity.z += std::cos(_yaw) * _mainCharacter.moveSpeed*_timeDelta;
-		_mainCharacter.velocity.x += -std::sin(_yaw) * _mainCharacter.moveSpeed*_timeDelta;
+		currAccel.z += std::cos(_yaw);
+		currAccel.x += -std::sin(_yaw);
 	}
 	if(glfwGetKey(_mainWindow, controlKeys[YKey::left]))
 	{
-		_mainCharacter.velocity.z -= std::cos(_yaw) * _mainCharacter.moveSpeed*_timeDelta;
-		_mainCharacter.velocity.x -= -std::sin(_yaw) * _mainCharacter.moveSpeed*_timeDelta;
+		currAccel.z -= std::cos(_yaw);
+		currAccel.x -= -std::sin(_yaw);
 	}
+	
 	if(glfwGetKey(_mainWindow, controlKeys[YKey::jump]))
 	{
 		if(_mainCharacter.onGround && !_mainCharacter.floating)
 		{
 			_mainCharacter.midJump = true;
-			_mainCharacter.velocity.y += _mainCharacter.jumpStrength;
+			currAccel.y += _mainCharacter.jumpStrength;
 			
 			_mainCharacter.onGround = false;
 		} else if(_mainCharacter.floating)
 		{
-			_mainCharacter.velocity.y += _mainCharacter.moveSpeed*_timeDelta;
+			currAccel.y += 1;
 		}
 	}
+	
 	if(glfwGetKey(_mainWindow, controlKeys[YKey::crouch]))
 	{
 		if(!_mainCharacter.floating)
@@ -287,12 +309,19 @@ void GameController::update_func()
 			_mainCharacter.sneaking = true;
 		} else
 		{
-			_mainCharacter.velocity.y -= _mainCharacter.moveSpeed*_timeDelta;
+			currAccel.y -= 1;
 		}
 	} else
 	{
 		_mainCharacter.sneaking = false;
 	}
+	
+	float vecLength = Vec3d<float>::magnitude(currAccel);
+	currAccel = vecLength!=0 ? currAccel/Vec3d<float>::magnitude(currAccel) : Vec3d<float>{0, 0, 0};
+	
+	//the magical force controlling the character
+	_mainCharacter.force = ((currAccel*_mainCharacter.moveSpeed) - _mainCharacter.velocity) * 100;
+	
 	
 	_mainPhysCtl.physics_update(_timeDelta);
 	

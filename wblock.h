@@ -7,16 +7,24 @@
 
 struct WorldBlock
 {
-public:
 	int blockType;	
 	WorldTypes::BlockInfo info = {}; 
 
 	void update();
 	Loot destroy();
 	
-	WorldTypes::TextureFace texture();
-	bool transparent();
+	WorldTypes::TextureFace texture() const;
+	bool transparent() const;
 };
 
+namespace WorldTypes
+{
+	struct BlockPlace
+	{
+		Vec3d<int> pos;
+			
+		WorldBlock block;
+	};
+}
 
 #endif

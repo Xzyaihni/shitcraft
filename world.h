@@ -12,64 +12,65 @@
 class WorldChunk
 {
 public:
+	typedef std::array<WorldBlock, chunkSize*chunkSize*chunkSize> ChunkBlocks;
+
 	WorldChunk() {};
 	WorldChunk(WorldGenerator* wGen, Vec3d<int> pos);
 	
-	void chunk_gen();
 	void update_mesh();
-	void update_wall(Direction wall, WorldChunk* checkChunk);
+	void update_wall(Direction wall, WorldChunk& checkChunk);
 	
 	void apply_model();
 	void remove_model();
 	
 	void update_states();
 	
-	void shared_place(Vec3d<int> position, WorldBlock block, bool replace = false);
+	void shared_place(Vec3d<int> position, WorldBlock block);
 	static Vec3d<int> active_chunk(Vec3d<int> pos);
 	static Vec3d<int> active_chunk(Vec3d<float> pos);
 	
 	Vec3d<int> closest_block(Vec3d<float> pos);
 	WorldBlock& block(Vec3d<int> pos);
 	
-	void update_block_walls(Vec3d<int> pos);
-	void update_block_walls(Vec3d<int> pos, int index);
+	void update_block_walls(const Vec3d<int> pos) const;
+	void update_block_walls(const Vec3d<int> pos, const int index) const;
 	
 	void set_empty(bool state);
 	bool empty();
 	bool has_transparent();
 	bool check_empty();
 	
-	Vec3d<int> position();
+	int plants_amount();
+	void set_plants_amount(int amount);
 	
-	static std::string model_name(Vec3d<int> pos);
+	Vec3d<int>& position();
+	
+	ChunkBlocks& blocks();
+	
+	static std::string model_name(const Vec3d<int> pos);
 
 private:
-	void r_forwardFace(Vec3d<int> pos);
-	void r_backFace(Vec3d<int> pos);
-	void r_leftFace(Vec3d<int> pos);
-	void r_rightFace(Vec3d<int> pos);
-	void r_upFace(Vec3d<int> pos);
-	void r_downFace(Vec3d<int> pos);
-
-	void a_forwardFace(Vec3d<int> pos, WorldTypes::TexPos texturePos);
-	void a_backFace(Vec3d<int> pos, WorldTypes::TexPos texturePos);
-	void a_leftFace(Vec3d<int> pos, WorldTypes::TexPos texturePos);
-	void a_rightFace(Vec3d<int> pos, WorldTypes::TexPos texturePos);
-	void a_upFace(Vec3d<int> pos, WorldTypes::TexPos texturePos);
-	void a_downFace(Vec3d<int> pos, WorldTypes::TexPos texturePos);
+	void a_forwardFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const;
+	void a_backFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const;
+	void a_leftFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const;
+	void a_rightFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const;
+	void a_upFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const;
+	void a_downFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const;
 
 	WorldGenerator* _wGen = nullptr;
 	
-	std::array<WorldBlock, chunkSize*chunkSize*chunkSize> _chunkBlocks;
+	ChunkBlocks _chunkBlocks;
 	
-	YandereModel _chunkModel = YandereModel();
+	mutable YandereModel _chunkModel;
 	std::string _modelName;
 	
-	unsigned _indexOffset;
+	mutable unsigned _indexOffset;
 	
 	Vec3d<int> _position;
 	
 	bool _empty = true;
+	
+	int _plantsAmount = 0;
 	
 	int _textureWidth;
 	int _textureHeight;

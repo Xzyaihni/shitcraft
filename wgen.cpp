@@ -38,8 +38,6 @@ atlasName(atlasName), _texAtlas(init->_textureMap[atlasName].width(), init->_tex
 {
 	_texAtlas.set_horizontal_blocks(8);
 	_texAtlas.set_vertical_blocks(8);
-
-	genHeight = 4;
 }
 
 void WorldGenerator::seed(unsigned seed)
@@ -48,11 +46,9 @@ void WorldGenerator::seed(unsigned seed)
 	_noiseGen = NoiseGenerator(seed);
 }
 
-std::array<float, chunkSize*chunkSize> WorldGenerator::generate(Vec3d<int> pos)
+std::array<float, chunkSize*chunkSize> WorldGenerator::generate_noise(Vec3d<int> pos, float noiseScale, float noiseStrength)
 {
-	float addTerrainSmall = terrainSmallScale/static_cast<float>(chunkSize);
-	float addTerrainMid = terrainMidScale/static_cast<float>(chunkSize);
-	float addTerrainLarge = terrainLargeScale/static_cast<float>(chunkSize);
+	float addNoise = noiseScale/static_cast<float>(chunkSize);
 
 	std::array<float, chunkSize*chunkSize> noiseArr;
 	
@@ -62,18 +58,14 @@ std::array<float, chunkSize*chunkSize> WorldGenerator::generate(Vec3d<int> pos)
 	{
 		for(int z = 0; z < chunkSize; ++z, ++noiseIndex)
 		{
-			float smallNoise = _noiseGen.noise(pos.x*terrainSmallScale+x*addTerrainSmall, pos.z*terrainSmallScale+z*addTerrainSmall)/4;
-			float midNoise = _noiseGen.noise(pos.x*terrainMidScale+x*addTerrainMid, pos.z*terrainMidScale+z*addTerrainMid);
-			float largeNoise = _noiseGen.noise(pos.x*terrainLargeScale+x*addTerrainLarge, pos.z*terrainLargeScale+z*addTerrainLarge)*2;
-		
-			noiseArr[noiseIndex] = midNoise*largeNoise+smallNoise;
+			noiseArr[noiseIndex] = _noiseGen.noise(pos.x*noiseScale+x*addNoise, pos.z*noiseScale+z*addNoise)*noiseStrength;
 		}
 	}
 	
 	return std::move(noiseArr);
 }
 
-std::array<ClimatePoint, chunkSize*chunkSize> WorldGenerator::generate_climate(Vec3d<int> pos)
+std::array<ClimatePoint, chunkSize*chunkSize> WorldGenerator::generate_climate(Vec3d<int> pos, float temperatureScale, float humidityScale)
 {
 	float addTemperature = temperatureScale/static_cast<float>(chunkSize);
 	float addHumidity = humidityScale/static_cast<float>(chunkSize);
@@ -96,10 +88,112 @@ std::array<ClimatePoint, chunkSize*chunkSize> WorldGenerator::generate_climate(V
 	return std::move(noiseArr);
 }
 
+void WorldGenerator::chunk_gen(WorldChunk& chunk)
+{
+	const float genHeight = 2.25f;
+	const float genDepth = 0;
+
+	if(chunk.position().y>genHeight)
+	{
+		chunk.set_empty(true);
+		return;
+	}
+	
+	chunk.set_empty(false);
+	
+	bool overground = chunk.position().y>=genDepth;
+	
+	WorldChunk::ChunkBlocks& currBlocks = chunk.blocks();
+	
+	if(!overground)
+	{
+		currBlocks.fill(WorldBlock{Block::stone});
+		
+		chunk.update_states();
+		
+		return;
+	}
+	
+	std::array<float, chunkSize*chunkSize> smallNoiseArr = generate_noise(chunk.position(), 1.05f, 0.25f);
+	std::array<float, chunkSize*chunkSize> mediumNoiseArr = generate_noise(chunk.position(), 0.22f, 1);
+	std::array<float, chunkSize*chunkSize> largeNoiseArr = generate_noise(chunk.position(), 0.005f, 2);
+	
+	std::array<ClimatePoint, chunkSize*chunkSize> climateArr = generate_climate(chunk.position(), 0.0136f, 0.0073f);
+	
+	
+	int blockIndex = 0;
+	
+	for(int x = 0; x < chunkSize; ++x)
+	{
+		for(int y = 0; y < chunkSize; ++y)
+		{
+			for(int z = 0; z < chunkSize; ++z, ++blockIndex)
+			{
+				int mapsIndex = x*chunkSize+z;
+				float currNoise;
+			
+				Biome currBiome = get_biome(climateArr[mapsIndex].temperature, climateArr[mapsIndex].humidity);
+			
+				switch(currBiome)
+				{
+					case Biome::hell:
+					{
+						currNoise = (largeNoiseArr[mapsIndex]/4*mediumNoiseArr[mapsIndex]/4+smallNoiseArr[mapsIndex]/4) * chunkSize;
+						break;
+					}
+				
+					default:
+					{
+						currNoise = (largeNoiseArr[mapsIndex]*mediumNoiseArr[mapsIndex]+smallNoiseArr[mapsIndex]) * chunkSize;
+						break;
+					}
+				}
+			
+				if(chunk.position().y*chunkSize+y<currNoise)
+				{
+					switch(currBiome)
+					{
+						case Biome::desert:
+						{
+							currBlocks[blockIndex] = WorldBlock{Block::sand};
+							break;
+						}
+						
+						case Biome::hell:
+						{
+							currBlocks[blockIndex] = WorldBlock{Block::lava};
+							break;
+						}
+						
+						default:
+						case Biome::forest:
+						{
+							bool currGrass = (chunk.position().y*chunkSize+y+1)>=currNoise;
+							currBlocks[blockIndex] = WorldBlock{Block::dirt, BlockInfo{currGrass}};
+							break;
+						}
+					}
+				} else
+				{
+					currBlocks[blockIndex] = WorldBlock{Block::air};
+				}
+			}
+		}
+	}
+	
+	gen_plants(chunk, climateArr);
+	
+	chunk.update_states();
+	chunk.update_mesh();
+}
+
 Biome WorldGenerator::get_biome(float temperature, float humidity)
 {
 	if(temperature>0.5f && humidity<0.5f)
 	{
+		if(temperature>0.65f)
+			return Biome::hell;
+			
 		return Biome::desert;
 	} else
 	{
@@ -125,10 +219,12 @@ Vec3d<int> WorldGenerator::get_ground(WorldChunk& checkChunk, int x, int z)
 
 void WorldGenerator::gen_plants(WorldChunk& genChunk, std::array<ClimatePoint, chunkSize*chunkSize>& climateArr)
 {
-	std::mt19937 sGen(_seed);
+	std::mt19937 sGen(_seed^(genChunk.position().x)^(genChunk.position().z));
 	std::uniform_int_distribution distrib(1, 1000);
 	
 	std::uniform_int_distribution plantDistrib(1, 8);
+
+	int plantsGenerated = 0;
 
 	int pointIndex = 0;
 	for(int x = 0; x < chunkSize; ++x)
@@ -141,6 +237,8 @@ void WorldGenerator::gen_plants(WorldChunk& genChunk, std::array<ClimatePoint, c
 				{
 					if(distrib(sGen) < (climateArr[pointIndex].humidity-0.10f)*10)
 					{
+						++plantsGenerated;
+					
 						Vec3d<int> groundPos = get_ground(genChunk, x, z);
 					
 						if(groundPos.y==0)
@@ -157,9 +255,10 @@ void WorldGenerator::gen_plants(WorldChunk& genChunk, std::array<ClimatePoint, c
 					break;
 				}
 			
-				default:
 				case Biome::forest:
 				{
+					++plantsGenerated;
+				
 					if(distrib(sGen) < (climateArr[pointIndex].humidity-0.45f)*50)
 					{	
 						Vec3d<int> groundPos = get_ground(genChunk, x, z);
@@ -194,15 +293,27 @@ void WorldGenerator::gen_plants(WorldChunk& genChunk, std::array<ClimatePoint, c
 					}
 					break;
 				}
+				
+				default:
+					break;
 			}
 		}
 	}
+	
+	genChunk.set_plants_amount(plantsGenerated);
 }
 
 
-void WorldGenerator::place_in_chunk(Direction callChunkSide, Vec3d<int> chunkPos, Vec3d<int> blockPos, WorldBlock block, bool replace)
+void WorldGenerator::place_in_chunk(Vec3d<int> originalPos, Vec3d<int> chunkPos, Vec3d<int> blockPos, WorldBlock block)
 {
-	std::unique_lock<std::mutex> lockB(_mtxBlockPlace);
+	std::lock_guard<std::mutex> lockB(_mtxBlockPlace);
 
-	_blockPlaceQueue.push({callChunkSide, chunkPos, blockPos, block, replace});
+	_blockPlaceList.emplace_back(chunkPos, originalPos, blockPos, block);
+}
+
+void WorldGenerator::place_in_chunk(std::list<VecPos>& blocks)
+{
+	std::lock_guard<std::mutex> lockB(_mtxBlockPlace);
+
+	_blockPlaceList.splice(_blockPlaceList.end(), blocks);
 }

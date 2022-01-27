@@ -20,7 +20,8 @@ namespace WorldTypes
 	enum Biome
 	{
 		forest = 0,
-		desert
+		desert,
+		hell
 	};
 	
 	enum Block
@@ -31,7 +32,8 @@ namespace WorldTypes
 		sand,
 		log,
 		leaf,
-		cactus
+		cactus,
+		lava
 	};
 	
 	struct TextureFace
@@ -49,7 +51,7 @@ namespace WorldTypes
 		bool grassy = false;
 	};
 	
-	const float blockModelSize = 1.0f/static_cast<float>(chunkSize);
+	constexpr float blockModelSize = 1.0f/static_cast<float>(chunkSize);
 };
 
 #endif

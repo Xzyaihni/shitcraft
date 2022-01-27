@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <chrono>
 #include <execution>
+
 #include <random>
 
 #include "world.h"
@@ -20,6 +21,8 @@ WorldChunk::WorldChunk(WorldGenerator* wGen, Vec3d<int> pos) : _wGen(wGen), _pos
 	_textureOffset = wGen->_texAtlas._texOffset;
 
 	_modelName = model_name(_position);
+	
+	_chunkModel = YandereModel{};
 }
 
 bool WorldChunk::has_transparent()
@@ -64,78 +67,6 @@ bool WorldChunk::check_empty()
 }
 
 
-void WorldChunk::chunk_gen()
-{	
-	assert(_wGen!=nullptr);	
-	
-	if(_position.y>_wGen->genHeight)
-	{
-		_empty = true;
-		return;
-	}
-	
-	_empty = false;
-	
-	bool overground = _position.y>=0;
-	
-	if(!overground)
-	{
-		_chunkBlocks.fill(WorldBlock{Block::stone});
-		
-		update_states();
-		
-		_chunkModel = YandereModel();
-		
-		return;
-	}
-	
-	std::array<float, chunkSize*chunkSize> noiseArr = _wGen->generate(_position);
-	std::array<ClimatePoint, chunkSize*chunkSize> climateArr = _wGen->generate_climate(_position);
-	
-	
-	int blockIndex = 0;
-	
-	for(int x = 0; x < chunkSize; ++x)
-	{
-		for(int y = 0; y < chunkSize; ++y)
-		{
-			for(int z = 0; z < chunkSize; ++z, ++blockIndex)
-			{
-				int mapsIndex = x*chunkSize+z;
-				float currNoise = noiseArr[mapsIndex]*chunkSize;
-			
-				if(_position.y*chunkSize+y<currNoise)
-				{
-					switch(_wGen->get_biome(climateArr[mapsIndex].temperature, climateArr[mapsIndex].humidity))
-					{
-						case Biome::desert:
-						{
-							_chunkBlocks[blockIndex] = WorldBlock{Block::sand};
-							break;
-						}
-						
-						default:
-						case Biome::forest:
-						{
-							bool currGrass = (_position.y*chunkSize+y+1)>=currNoise;
-							_chunkBlocks[blockIndex] = WorldBlock{Block::dirt, BlockInfo{currGrass}};
-							break;
-						}
-					}
-				} else
-				{
-					_chunkBlocks[blockIndex] = WorldBlock{Block::air};
-				}
-			}
-		}
-	}
-	
-	_wGen->gen_plants(*this, climateArr);
-	
-	update_states();
-	update_mesh();
-}
-
 void WorldChunk::update_states()
 {
 	if(_empty)
@@ -147,7 +78,7 @@ void WorldChunk::update_states()
 	});
 }
 
-void WorldChunk::shared_place(Vec3d<int> position, WorldBlock block, bool replace)
+void WorldChunk::shared_place(Vec3d<int> position, WorldBlock block)
 {
 	if(position.x<0 || position.y<0 || position.z<0
 	|| position.x>(chunkSize-1) || position.y>(chunkSize-1) || position.z>(chunkSize-1))
@@ -156,35 +87,10 @@ void WorldChunk::shared_place(Vec3d<int> position, WorldBlock block, bool replac
 		Vec3d<int> placeChunk = active_chunk(position);
 		Vec3d<int> newPos = position-placeChunk*chunkSize;
 		
-		Direction currSide;
-		
-		bool found = false;
-		
-		if(!found && position.x<0)
-			currSide = Direction::right;
-			
-		if(!found && position.y<0)
-			currSide = Direction::up;
-			
-		if(!found && position.z<0)
-			currSide = Direction::forward;
-			
-		if(!found && position.x>(chunkSize-1))
-			currSide = Direction::left;
-			
-		if(!found && position.y>(chunkSize-1))
-			currSide = Direction::down;
-			
-		if(!found && position.z>(chunkSize-1))
-			currSide = Direction::back;
-		
-		_wGen->place_in_chunk(currSide, _position+placeChunk, newPos, block, replace);
+		_wGen->place_in_chunk(_position, _position+placeChunk, newPos, block);
 	} else
 	{
-		if(replace || this->block(position).blockType==Block::air)
-		{
-			this->block(position) = block;
-		}
+		this->block(position) = block;
 	}
 }
 
@@ -299,55 +205,37 @@ void WorldChunk::update_mesh()
 }
 
 
-void WorldChunk::update_block_walls(Vec3d<int> pos)
+void WorldChunk::update_block_walls(const Vec3d<int> pos) const
 {
 	update_block_walls(pos, pos.x*chunkSize*chunkSize+pos.y*chunkSize+pos.z);
 }
 
-void WorldChunk::update_block_walls(Vec3d<int> pos, int index)
+void WorldChunk::update_block_walls(const Vec3d<int> pos, const int index) const
 {
 	//if both the current and the check block are the same, don't draw the side (makes stuff like leaves connect into a single thing)
 	int bCurr = _chunkBlocks[index].blockType;
 	
-	bool nextTzp = pos.z!=(chunkSize-1) ? _chunkBlocks[index+1].transparent() : false;
-	bool nextTzn = pos.z!=0 ? _chunkBlocks[index-1].transparent() : false;
+	const TextureFace& currText = _chunkBlocks[index].texture();
 	
-	bool nextTyp = pos.y!=(chunkSize-1) ? _chunkBlocks[index+chunkSize].transparent() : false;
-	bool nextTyn = pos.y!=0 ? _chunkBlocks[index-chunkSize].transparent() : false;
+	const Vec3d<float> posU = Vec3dCVT<float>(pos)*blockModelSize;
 	
-	bool nextTxp = pos.x!=(chunkSize-1) ? _chunkBlocks[index+chunkSize*chunkSize].transparent() : false;
-	bool nextTxn = pos.x!=0 ? _chunkBlocks[index-chunkSize*chunkSize].transparent() : false;
+	if((pos.z!=(chunkSize-1)) && _chunkBlocks[index+1].transparent() && (bCurr != _chunkBlocks[index+1].blockType))
+		a_forwardFace(posU, currText.forward);
 	
-	
-	if(nextTzp && !(bCurr == _chunkBlocks[index+1].blockType))
-	{
-		a_forwardFace(pos, _chunkBlocks[index].texture().forward);
-	}
-	
-	if(nextTzn && !(bCurr == _chunkBlocks[index-1].blockType))
-	{
-		a_backFace(pos, _chunkBlocks[index].texture().back);
-	}
+	if((pos.z!=0) && _chunkBlocks[index-1].transparent() && (bCurr != _chunkBlocks[index-1].blockType))
+		a_backFace(posU, currText.back);
 
-	if(nextTyp && !(bCurr == _chunkBlocks[index+chunkSize].blockType))
-	{
-		a_upFace(pos, _chunkBlocks[index].texture().up);
-	}
+	if((pos.y!=(chunkSize-1)) && _chunkBlocks[index+chunkSize].transparent() && (bCurr != _chunkBlocks[index+chunkSize].blockType))
+		a_upFace(posU, currText.up);
 
-	if(nextTyn && !(bCurr == _chunkBlocks[index-chunkSize].blockType))
-	{
-		a_downFace(pos, _chunkBlocks[index].texture().down);
-	}
+	if((pos.y!=0) && _chunkBlocks[index-chunkSize].transparent() && (bCurr != _chunkBlocks[index-chunkSize].blockType))
+		a_downFace(posU, currText.down);
 
-	if(nextTxp && !(bCurr == _chunkBlocks[index+chunkSize*chunkSize].blockType))
-	{
-		a_rightFace(pos, _chunkBlocks[index].texture().right);
-	}
+	if((pos.x!=(chunkSize-1)) && _chunkBlocks[index+chunkSize*chunkSize].transparent() && (bCurr != _chunkBlocks[index+chunkSize*chunkSize].blockType))
+		a_rightFace(posU, currText.right);
 
-	if(nextTxn && !(bCurr == _chunkBlocks[index-chunkSize*chunkSize].blockType))
-	{
-		a_leftFace(pos, _chunkBlocks[index].texture().left);
-	}
+	if((pos.x!=0) && _chunkBlocks[index-chunkSize*chunkSize].transparent() && (bCurr != _chunkBlocks[index-chunkSize*chunkSize].blockType))
+		a_leftFace(posU, currText.left);
 }
 
 void WorldChunk::apply_model()
@@ -368,9 +256,9 @@ void WorldChunk::remove_model()
 	_empty = true;
 }
 
-void WorldChunk::update_wall(Direction wall, WorldChunk* checkChunk)
+void WorldChunk::update_wall(Direction wall, WorldChunk& checkChunk)
 {
-	if(_empty || checkChunk->empty())
+	if(_empty || checkChunk.empty())
 		return;
 		
 
@@ -387,11 +275,9 @@ void WorldChunk::update_wall(Direction wall, WorldChunk* checkChunk)
 				{
 					if(_chunkBlocks[blockIndex].blockType!=Block::air)
 					{
-						if(checkChunk->_chunkBlocks[blockIndex-startingIndex].transparent()
-						&& (_chunkBlocks[blockIndex].blockType != checkChunk->_chunkBlocks[blockIndex-startingIndex].blockType))
-						{
-							a_rightFace({chunkSize-1, y, z}, _chunkBlocks[blockIndex].texture().right);
-						}
+						if(checkChunk._chunkBlocks[blockIndex-startingIndex].transparent()
+						&& (_chunkBlocks[blockIndex].blockType != checkChunk._chunkBlocks[blockIndex-startingIndex].blockType))
+							a_rightFace(Vec3dCVT<float>(chunkSize-1, y, z)*blockModelSize, _chunkBlocks[blockIndex].texture().right);
 					}
 				}
 			}
@@ -409,11 +295,9 @@ void WorldChunk::update_wall(Direction wall, WorldChunk* checkChunk)
 				{
 					if(_chunkBlocks[blockIndex-startingIndex].blockType!=Block::air)
 					{
-						if(checkChunk->_chunkBlocks[blockIndex].transparent()
-						&& (_chunkBlocks[blockIndex-startingIndex].blockType != checkChunk->_chunkBlocks[blockIndex].blockType))
-						{
-							a_leftFace({0, y, z}, _chunkBlocks[blockIndex-startingIndex].texture().left);
-						}
+						if(checkChunk._chunkBlocks[blockIndex].transparent()
+						&& (_chunkBlocks[blockIndex-startingIndex].blockType != checkChunk._chunkBlocks[blockIndex].blockType))
+							a_leftFace(Vec3dCVT<float>(0, y, z)*blockModelSize, _chunkBlocks[blockIndex-startingIndex].texture().left);
 					}
 				}
 			}
@@ -427,15 +311,13 @@ void WorldChunk::update_wall(Direction wall, WorldChunk* checkChunk)
 				for(int z = 0; z < chunkSize; ++z)
 				{
 					WorldBlock* blockCurr = &block({x, chunkSize-1, z});
-					WorldBlock* blockCheck = &checkChunk->block({x, 0, z});
+					WorldBlock* blockCheck = &checkChunk.block({x, 0, z});
 					
 					if(blockCurr->blockType!=Block::air)
 					{
 						if(blockCheck->transparent()
 						&& (blockCurr->blockType != blockCheck->blockType))
-						{
-							a_upFace({x, chunkSize-1, z}, blockCurr->texture().up);
-						}
+							a_upFace(Vec3dCVT<float>(x, chunkSize-1, z)*blockModelSize, blockCurr->texture().up);
 					}
 				}
 			}
@@ -449,15 +331,13 @@ void WorldChunk::update_wall(Direction wall, WorldChunk* checkChunk)
 				for(int z = 0; z < chunkSize; ++z)
 				{
 					WorldBlock* blockCurr = &block({x, 0, z});
-					WorldBlock* blockCheck = &checkChunk->block({x, chunkSize-1, z});
+					WorldBlock* blockCheck = &checkChunk.block({x, chunkSize-1, z});
 				
 					if(blockCurr->blockType!=Block::air)
 					{
 						if(blockCheck->transparent()
 						&& (blockCurr->blockType != blockCheck->blockType))
-						{
-							a_downFace({x, 0, z}, blockCurr->texture().down);
-						}
+							a_downFace(Vec3dCVT<float>(x, 0, z)*blockModelSize, blockCurr->texture().down);
 					}
 				}
 			}
@@ -474,11 +354,9 @@ void WorldChunk::update_wall(Direction wall, WorldChunk* checkChunk)
 				{
 					if(_chunkBlocks[blockIndex+chunkSize-1].blockType!=Block::air)
 					{
-						if(checkChunk->_chunkBlocks[blockIndex].transparent()
-						&& (_chunkBlocks[blockIndex+chunkSize-1].blockType != checkChunk->_chunkBlocks[blockIndex].blockType))
-						{
-							a_forwardFace({x, y, chunkSize-1}, _chunkBlocks[blockIndex+chunkSize-1].texture().forward);
-						}
+						if(checkChunk._chunkBlocks[blockIndex].transparent()
+						&& (_chunkBlocks[blockIndex+chunkSize-1].blockType != checkChunk._chunkBlocks[blockIndex].blockType))
+							a_forwardFace(Vec3dCVT<float>(x, y, chunkSize-1)*blockModelSize, _chunkBlocks[blockIndex+chunkSize-1].texture().forward);
 					}
 				}
 			}
@@ -495,11 +373,9 @@ void WorldChunk::update_wall(Direction wall, WorldChunk* checkChunk)
 				{
 					if(_chunkBlocks[blockIndex].blockType!=Block::air)
 					{
-						if(checkChunk->_chunkBlocks[blockIndex+chunkSize-1].transparent()
-						&& (_chunkBlocks[blockIndex].blockType != checkChunk->_chunkBlocks[blockIndex+chunkSize-1].blockType))
-						{
-							a_backFace({x, y, 0}, _chunkBlocks[blockIndex].texture().back);
-						}
+						if(checkChunk._chunkBlocks[blockIndex+chunkSize-1].transparent()
+						&& (_chunkBlocks[blockIndex].blockType != checkChunk._chunkBlocks[blockIndex+chunkSize-1].blockType))
+							a_backFace(Vec3dCVT<float>(x, y, 0)*blockModelSize, _chunkBlocks[blockIndex].texture().back);
 					}
 				}
 			}
@@ -509,11 +385,9 @@ void WorldChunk::update_wall(Direction wall, WorldChunk* checkChunk)
 }
 
 
-void WorldChunk::a_forwardFace(Vec3d<int> pos, TexPos texturePos)
+void WorldChunk::a_forwardFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const
 {
 	//i cant write any better code for these, it literally HAS to be hardcoded :/
-	Vec3d<float> posU = {pos.x*blockModelSize, pos.y*blockModelSize, pos.z*blockModelSize};
-
 	_chunkModel.vertices.insert(_chunkModel.vertices.end(),
 	{posU.x, posU.y, posU.z+blockModelSize, _textureOffset*texturePos.x, _textureOffset*texturePos.y,
 	posU.x+blockModelSize, posU.y, posU.z+blockModelSize, _textureOffset*texturePos.x+_textureOffset, _textureOffset*texturePos.y,
@@ -524,10 +398,8 @@ void WorldChunk::a_forwardFace(Vec3d<int> pos, TexPos texturePos)
 	
 	_indexOffset += 4;
 }
-void WorldChunk::a_backFace(Vec3d<int> pos, TexPos texturePos)
+void WorldChunk::a_backFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const
 {
-	Vec3d<float> posU = {pos.x*blockModelSize, pos.y*blockModelSize, pos.z*blockModelSize};
-	
 	_chunkModel.vertices.insert(_chunkModel.vertices.end(),
 	{posU.x, posU.y, posU.z, _textureOffset*texturePos.x, _textureOffset*texturePos.y,
 	posU.x+blockModelSize, posU.y, posU.z, _textureOffset*texturePos.x+_textureOffset, _textureOffset*texturePos.y,
@@ -538,10 +410,8 @@ void WorldChunk::a_backFace(Vec3d<int> pos, TexPos texturePos)
 	
 	_indexOffset += 4;
 }
-void WorldChunk::a_leftFace(Vec3d<int> pos, TexPos texturePos)
+void WorldChunk::a_leftFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const
 {
-	Vec3d<float> posU = {pos.x*blockModelSize, pos.y*blockModelSize, pos.z*blockModelSize};
-	
 	_chunkModel.vertices.insert(_chunkModel.vertices.end(),
 	{posU.x, posU.y, posU.z, _textureOffset*texturePos.x, _textureOffset*texturePos.y,
 	posU.x, posU.y, posU.z+blockModelSize, _textureOffset*texturePos.x+_textureOffset, _textureOffset*texturePos.y,
@@ -552,10 +422,8 @@ void WorldChunk::a_leftFace(Vec3d<int> pos, TexPos texturePos)
 	
 	_indexOffset += 4;
 }
-void WorldChunk::a_rightFace(Vec3d<int> pos, TexPos texturePos)
+void WorldChunk::a_rightFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const
 {
-	Vec3d<float> posU = {pos.x*blockModelSize, pos.y*blockModelSize, pos.z*blockModelSize};
-	
 	_chunkModel.vertices.insert(_chunkModel.vertices.end(),
 	{posU.x+blockModelSize, posU.y, posU.z, _textureOffset*texturePos.x, _textureOffset*texturePos.y,
 	posU.x+blockModelSize, posU.y, posU.z+blockModelSize, _textureOffset*texturePos.x+_textureOffset, _textureOffset*texturePos.y,
@@ -566,10 +434,8 @@ void WorldChunk::a_rightFace(Vec3d<int> pos, TexPos texturePos)
 	
 	_indexOffset += 4;
 }
-void WorldChunk::a_upFace(Vec3d<int> pos, TexPos texturePos)
+void WorldChunk::a_upFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const
 {
-	Vec3d<float> posU = {pos.x*blockModelSize, pos.y*blockModelSize, pos.z*blockModelSize};
-	
 	_chunkModel.vertices.insert(_chunkModel.vertices.end(),
 	{posU.x, posU.y+blockModelSize, posU.z, _textureOffset*texturePos.x, _textureOffset*texturePos.y,
 	posU.x+blockModelSize, posU.y+blockModelSize, posU.z, _textureOffset*texturePos.x+_textureOffset, _textureOffset*texturePos.y,
@@ -580,10 +446,8 @@ void WorldChunk::a_upFace(Vec3d<int> pos, TexPos texturePos)
 	
 	_indexOffset += 4;
 }
-void WorldChunk::a_downFace(Vec3d<int> pos, TexPos texturePos)
+void WorldChunk::a_downFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const
 {
-	Vec3d<float> posU = {pos.x*blockModelSize, pos.y*blockModelSize, pos.z*blockModelSize};
-	
 	_chunkModel.vertices.insert(_chunkModel.vertices.end(),
 	{posU.x, posU.y, posU.z, _textureOffset*texturePos.x, _textureOffset*texturePos.y,
 	posU.x+blockModelSize, posU.y, posU.z, _textureOffset*texturePos.x+_textureOffset, _textureOffset*texturePos.y,
@@ -615,12 +479,27 @@ bool WorldChunk::empty()
 	return _empty;
 }
 
-Vec3d<int> WorldChunk::position()
+int WorldChunk::plants_amount()
+{
+	return _plantsAmount;
+}
+
+void WorldChunk::set_plants_amount(int amount)
+{
+	_plantsAmount = amount;
+}
+
+Vec3d<int> &WorldChunk::position()
 {
 	return _position;
 }
 
-std::string WorldChunk::model_name(Vec3d<int> pos)
+WorldChunk::ChunkBlocks& WorldChunk::blocks()
+{
+	return _chunkBlocks;
+}
+
+std::string WorldChunk::model_name(const Vec3d<int> pos)
 {
 	std::string chunkModelName = "!cHUNK" + std::to_string(pos.x);
 	chunkModelName += '_';

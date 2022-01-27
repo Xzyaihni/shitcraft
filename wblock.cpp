@@ -12,7 +12,7 @@ Loot WorldBlock::destroy()
 	return Loot{};
 }
 
-TextureFace WorldBlock::texture()
+TextureFace WorldBlock::texture() const
 {
 	switch(blockType)
 	{
@@ -34,13 +34,16 @@ TextureFace WorldBlock::texture()
 			
 		case Block::cactus:
 			return TextureFace{{5, 0}, {5, 0}, {5, 0}, {5, 0}, {5, 1}, {5, 1}};
+			
+		case Block::lava:
+			return TextureFace{{6, 0}, {6, 0}, {6, 0}, {6, 0}, {6, 0}, {6, 0}};
 		
 		default:
 			return TextureFace{};
 	}
 }
 
-bool WorldBlock::transparent()
+bool WorldBlock::transparent() const
 {
 	switch(blockType)
 	{

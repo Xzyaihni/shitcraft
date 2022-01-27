@@ -2,6 +2,8 @@
 #define WCTL_H
 
 #include <map>
+#include <set>
+#include <vector>
 
 #include <glcyan.h>
 #include <ythreads.h>
@@ -12,12 +14,6 @@
 class WorldController
 {
 public:
-	struct MeshVisible
-	{
-		YandereObject mesh;
-		bool visible = false;
-	};
-	
 	struct UpdateChunk
 	{
 		bool right = true;
@@ -28,6 +24,13 @@ public:
 		bool back = true;
 		
 		bool walls_or() {return right || left || up || down || forward || back;};
+	};
+
+	struct MeshInfo
+	{
+		YandereObject mesh;
+		
+		bool visible = false;
 	};
 	
 	struct PosWalls
@@ -52,7 +55,8 @@ public:
 	
 	void draw_update();
 	
-	void update_queued();
+	std::map<Vec3d<int>, UpdateChunk> update_queued();
+	void queue_updater(const std::map<Vec3d<int>, UpdateChunk>& queuedChunks);
 	
 	
 	int render_dist();
@@ -64,6 +68,8 @@ private:
 	void chunk_loader(Vec3d<int> chunkPos);
 	void update_walls(PosWalls currChunk);
 
+	bool chunk_outside(const Vec3d<int> pos) const;
+
 	void init_chunks();
 	
 	YandereInitializer* _initer = nullptr;
@@ -71,11 +77,12 @@ private:
 	YandereCamera* _mainCamera = nullptr;
 	std::unique_ptr<WorldGenerator> _worldGen;
 	
-	std::map<Vec3d<int>, MeshVisible> _drawMeshes;
-	
 	std::queue<Vec3d<int>> _initializeChunks;
+	
+	std::map<Vec3d<int>, MeshInfo> _chunksInfo;
+	std::set<Vec3d<int>> _beenLoadedChunks;
+	
 	std::map<Vec3d<int>, UpdateChunk> _chunkUpdateWalls;
-	std::map<Vec3d<int>, bool> _updateLoaded;
 	
 	int _chunkRadius = 6;
 	int _renderDist = 5;

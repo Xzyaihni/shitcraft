@@ -25,6 +25,8 @@ public:
 	
 	Vec3d<float> position = {0, 0, 0};
 	Vec3d<float> velocity = {0, 0, 0};
+	Vec3d<float> acceleration = {0, 0, 0};
+	Vec3d<float> force = {0, 0, 0};
 	
 	Vec3d<float> rotationAxis = {1, 0, 0};
 	float rotation = 0;
@@ -36,12 +38,18 @@ public:
 	bool floating = false;
 	bool isStatic = false;
 	
+	float size = 1;
 	float mass = 1;
 	
 	void update(double timeDelta);
 	
 private:
+	static Vec3d<float> apply_friction(Vec3d<float> velocity, float friction);
+
 	PhysicsController* _physCtl = nullptr;
+	
+	//sphere's drag coefficient
+	float dragCoefficient = 0.47f;
 };
 
 class PhysicsController
@@ -56,7 +64,7 @@ public:
 	
 	std::vector<std::reference_wrapper<PhysicsObject>> physObjs;
 	
-	float friction = 4;
+	float airDensity = 1.225f;
 	Vec3d<float> gravity = {0, -1, 0};
 	
 	static Vec3d<float> calc_dir(float yaw, float pitch);

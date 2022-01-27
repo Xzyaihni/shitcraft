@@ -2,8 +2,8 @@
 #define TYPES_H
 
 #include <cmath>
-#include <compare>
 #include <ostream>
+#include <tuple>
 
 const int chunkSize = 32;
 
@@ -16,8 +16,35 @@ struct Vec3d
 	T y;
 	T z;
 	
-	auto operator<=>(const Vec3d<T>&) const = default;
-	bool operator==(const Vec3d<T>&) const = default;
+	bool operator<(const Vec3d<T>& other) const
+	{
+		return std::tie(x, y, z) < std::tie(other.x, other.y, other.z);
+	}
+	
+	bool operator<=(const Vec3d<T>& other) const
+	{
+		return (*this < other) || (*this == other);
+	}
+	
+	bool operator>(const Vec3d<T>& other) const
+	{
+		return other < *this;
+	}
+	
+	bool operator>=(const Vec3d<T>& other) const
+	{
+		return (*this > other) || (*this == other);
+	}
+	
+	bool operator==(const Vec3d<T>& other) const
+	{
+		return x==other.x && y==other.y && z==other.z;
+	}
+	
+	bool operator!=(const Vec3d<T>& other) const
+	{
+		return !(*this==other);
+	}
 	
 	Vec3d<T>& operator+=(const Vec3d<T>& r)
 	{
@@ -49,12 +76,12 @@ struct Vec3d
 	
 	friend Vec3d<T> operator*(const Vec3d<T>& l, const Vec3d<T>& r)
 	{
-		return Vec3d<T>(l.x*r.x, l.y*r.y, l.z*r.z);
+		return Vec3d<T>{l.x*r.x, l.y*r.y, l.z*r.z};
 	}
 	
 	friend Vec3d<T> operator*(const Vec3d<T>& l, const T& r)
 	{
-		return Vec3d<T>(l.x*r, l.y*r, l.z*r);
+		return Vec3d<T>{l.x*r, l.y*r, l.z*r};
 	}
 	
 	friend Vec3d<T> operator*(const T& l, const Vec3d<T>& r)
@@ -64,12 +91,12 @@ struct Vec3d
 	
 	friend Vec3d<T> operator/(const Vec3d<T>& l, const Vec3d<T>& r)
 	{
-		return Vec3d<T>(l.x/r.x, l.y/r.y, l.z/r.z);
+		return Vec3d<T>{l.x/r.x, l.y/r.y, l.z/r.z};
 	}
 	
 	friend Vec3d<T> operator/(const Vec3d<T>& l, const T& r)
 	{
-		return Vec3d<T>(l.x/r, l.y/r, l.z/r);
+		return Vec3d<T>{l.x/r, l.y/r, l.z/r};
 	}
 	
 	friend Vec3d<T> operator/(const T& l, const Vec3d<T>& r)
@@ -99,10 +126,17 @@ struct Vec3d
 
 //this isnt good code i think
 template<typename A, typename B>
-Vec3d<A> Vec3dCVT(Vec3d<B> n)
+Vec3d<A> Vec3dCVT(const B& x, const B& y, const B& z)
 {
-	return Vec3d<A>{static_cast<A>(n.x), static_cast<A>(n.y), static_cast<A>(n.z)};
+	return Vec3d<A>{static_cast<const A>(x), static_cast<const A>(y), static_cast<const A>(z)};
 }
+
+template<typename A, typename B>
+Vec3d<A> Vec3dCVT(const Vec3d<B>& n)
+{
+	return  Vec3d<A>{static_cast<const A>(n.x), static_cast<const A>(n.y), static_cast<const A>(n.z)};
+}
+
 
 Direction directionOpposite(Direction dir);
 Vec3d<int> directionAdd(Vec3d<int> add_vec, Direction dir, int offset = 1);

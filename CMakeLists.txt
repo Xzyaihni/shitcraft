@@ -4,13 +4,9 @@ set(CMAKE_CXX_STANDARD 20)
 
 option(Y_DEBUG "build in debug mode" "OFF")
 option(Y_SANITIZE "build with address sanitizer" "OFF")
-option(Y_CROSSCOMPILEW "cross compile on linux for windows" "OFF")
 set(Y_GLMPATH "/home/yanyana/cppPackages/glm" CACHE FILEPATH "path to glm library")
 set(Y_INCLUDE_DIR "./" CACHE FILEPATH "custom include directory")
 
-if(${Y_CROSSCOMPILEW})
-	set(CMAKE_CXX_COMPILER i686-w64-mingw32-g++)
-endif()
 
 set(CMAKE_PREFIX_PATH "${Y_GLMPATH}/cmake")
 set(YANDERELIBS "yanderegllib/glcyan.cpp"
@@ -64,13 +60,10 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${OPENGL_INCLUDE_DIR}
 ${GLUT_INCLUDE_DIR}
 ${FREETYPE_INCLUDE_DIRS})
 
-if(${Y_CROSSCOMPILEW})
-	target_link_libraries(${PROJECT_NAME} -static-libgcc -static-libstdc++)
-endif()
 
 
 if(${Y_DEBUG})
-	target_link_libraries(${PROJECT_NAME} -O1 -pg)
+	target_link_libraries(${PROJECT_NAME} -O1 -pg -Wall)
 	
 	if(${Y_SANITIZE})
 		target_link_libraries(${PROJECT_NAME} -fsanitize=address)
@@ -80,10 +73,12 @@ else()
 endif()
 
 target_link_libraries(${PROJECT_NAME} ${THREADS_LIBRARIES} -lpthread)
+target_link_libraries(${PROJECT_NAME} tbb)
+	
 target_link_libraries(${PROJECT_NAME} ${OPENGL_LIBRARIES})
 target_link_libraries(${PROJECT_NAME} ${GLEW_LIBRARIES})
 target_link_libraries(${PROJECT_NAME} glfw)
 target_link_libraries(${PROJECT_NAME} ${X11_LIBRARIES})
-target_link_libraries(${PROJECT_NAME} tbb)
-target_link_libraries(${PROJECT_NAME} glm::glm)
 target_link_libraries(${PROJECT_NAME} ${FREETYPE_LIBRARIES})
+
+target_link_libraries(${PROJECT_NAME} glm::glm)
