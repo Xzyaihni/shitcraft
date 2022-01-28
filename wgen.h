@@ -3,7 +3,6 @@
 
 #include <mutex>
 #include <map>
-#include <list>
 
 #include <glcyan.h>
 
@@ -65,14 +64,14 @@ public:
 	Vec3d<int> get_ground(WorldChunk& checkChunk, int x, int z);
 	
 	void place_in_chunk(Vec3d<int> originalPos, Vec3d<int> chunkPos, Vec3d<int> blockPos, WorldBlock block);
-	void place_in_chunk(std::list<VecPos>& blocks);
+	void place_in_chunk(std::vector<VecPos>& blocks);
 	
 	std::string atlasName;
 
 protected:
 	std::mutex _mtxBlockPlace;
 	
-	std::list<VecPos> _blockPlaceList;
+	std::vector<VecPos> _blockPlaceVec;
 
 	YandereInitializer* _init;
 	BlockTexAtlas _texAtlas;

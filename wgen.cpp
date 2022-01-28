@@ -257,10 +257,10 @@ void WorldGenerator::gen_plants(WorldChunk& genChunk, std::array<ClimatePoint, c
 			
 				case Biome::forest:
 				{
-					++plantsGenerated;
-				
 					if(distrib(sGen) < (climateArr[pointIndex].humidity-0.45f)*50)
-					{	
+					{
+						++plantsGenerated;
+						
 						Vec3d<int> groundPos = get_ground(genChunk, x, z);
 					
 						if(groundPos.y==0)
@@ -308,12 +308,13 @@ void WorldGenerator::place_in_chunk(Vec3d<int> originalPos, Vec3d<int> chunkPos,
 {
 	std::lock_guard<std::mutex> lockB(_mtxBlockPlace);
 
-	_blockPlaceList.emplace_back(chunkPos, originalPos, blockPos, block);
+	_blockPlaceVec.reserve(1);
+	_blockPlaceVec.emplace_back(chunkPos, originalPos, blockPos, block);
 }
 
-void WorldGenerator::place_in_chunk(std::list<VecPos>& blocks)
+void WorldGenerator::place_in_chunk(std::vector<VecPos>& blocks)
 {
 	std::lock_guard<std::mutex> lockB(_mtxBlockPlace);
 
-	_blockPlaceList.splice(_blockPlaceList.end(), blocks);
+	_blockPlaceVec.insert(_blockPlaceVec.end(), blocks.begin(), blocks.end());
 }

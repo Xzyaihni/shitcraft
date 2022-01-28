@@ -32,8 +32,8 @@ public:
 	Vec3d<int> closest_block(Vec3d<float> pos);
 	WorldBlock& block(Vec3d<int> pos);
 	
-	void update_block_walls(const Vec3d<int> pos) const;
-	void update_block_walls(const Vec3d<int> pos, const int index) const;
+	void update_block_walls(const Vec3d<int> pos) const noexcept;
+	void update_block_walls(const Vec3d<int> pos, const int index) const noexcept;
 	
 	void set_empty(bool state);
 	bool empty();
@@ -50,12 +50,12 @@ public:
 	static std::string model_name(const Vec3d<int> pos);
 
 private:
-	void a_forwardFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const;
-	void a_backFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const;
-	void a_leftFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const;
-	void a_rightFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const;
-	void a_upFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const;
-	void a_downFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const;
+	void a_forwardFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const noexcept;
+	void a_backFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const noexcept;
+	void a_leftFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const noexcept;
+	void a_rightFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const noexcept;
+	void a_upFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const noexcept;
+	void a_downFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const noexcept;
 
 	WorldGenerator* _wGen = nullptr;
 	

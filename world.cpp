@@ -205,17 +205,18 @@ void WorldChunk::update_mesh()
 }
 
 
-void WorldChunk::update_block_walls(const Vec3d<int> pos) const
+void WorldChunk::update_block_walls(const Vec3d<int> pos) const noexcept
 {
 	update_block_walls(pos, pos.x*chunkSize*chunkSize+pos.y*chunkSize+pos.z);
 }
 
-void WorldChunk::update_block_walls(const Vec3d<int> pos, const int index) const
+void WorldChunk::update_block_walls(const Vec3d<int> pos, const int index) const noexcept
 {
 	//if both the current and the check block are the same, don't draw the side (makes stuff like leaves connect into a single thing)
-	int bCurr = _chunkBlocks[index].blockType;
+	const WorldBlock& currBlock = _chunkBlocks[index];
+	int bCurr = currBlock.blockType;
 	
-	const TextureFace& currText = _chunkBlocks[index].texture();
+	const TextureFace& currText = currBlock.texture();
 	
 	const Vec3d<float> posU = Vec3dCVT<float>(pos)*blockModelSize;
 	
@@ -385,7 +386,7 @@ void WorldChunk::update_wall(Direction wall, WorldChunk& checkChunk)
 }
 
 
-void WorldChunk::a_forwardFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const
+void WorldChunk::a_forwardFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const noexcept
 {
 	//i cant write any better code for these, it literally HAS to be hardcoded :/
 	_chunkModel.vertices.insert(_chunkModel.vertices.end(),
@@ -398,7 +399,7 @@ void WorldChunk::a_forwardFace(const Vec3d<float> posU, const WorldTypes::TexPos
 	
 	_indexOffset += 4;
 }
-void WorldChunk::a_backFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const
+void WorldChunk::a_backFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const noexcept
 {
 	_chunkModel.vertices.insert(_chunkModel.vertices.end(),
 	{posU.x, posU.y, posU.z, _textureOffset*texturePos.x, _textureOffset*texturePos.y,
@@ -410,7 +411,7 @@ void WorldChunk::a_backFace(const Vec3d<float> posU, const WorldTypes::TexPos te
 	
 	_indexOffset += 4;
 }
-void WorldChunk::a_leftFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const
+void WorldChunk::a_leftFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const noexcept
 {
 	_chunkModel.vertices.insert(_chunkModel.vertices.end(),
 	{posU.x, posU.y, posU.z, _textureOffset*texturePos.x, _textureOffset*texturePos.y,
@@ -422,7 +423,7 @@ void WorldChunk::a_leftFace(const Vec3d<float> posU, const WorldTypes::TexPos te
 	
 	_indexOffset += 4;
 }
-void WorldChunk::a_rightFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const
+void WorldChunk::a_rightFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const noexcept
 {
 	_chunkModel.vertices.insert(_chunkModel.vertices.end(),
 	{posU.x+blockModelSize, posU.y, posU.z, _textureOffset*texturePos.x, _textureOffset*texturePos.y,
@@ -434,7 +435,7 @@ void WorldChunk::a_rightFace(const Vec3d<float> posU, const WorldTypes::TexPos t
 	
 	_indexOffset += 4;
 }
-void WorldChunk::a_upFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const
+void WorldChunk::a_upFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const noexcept
 {
 	_chunkModel.vertices.insert(_chunkModel.vertices.end(),
 	{posU.x, posU.y+blockModelSize, posU.z, _textureOffset*texturePos.x, _textureOffset*texturePos.y,
@@ -446,7 +447,7 @@ void WorldChunk::a_upFace(const Vec3d<float> posU, const WorldTypes::TexPos text
 	
 	_indexOffset += 4;
 }
-void WorldChunk::a_downFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const
+void WorldChunk::a_downFace(const Vec3d<float> posU, const WorldTypes::TexPos texturePos) const noexcept
 {
 	_chunkModel.vertices.insert(_chunkModel.vertices.end(),
 	{posU.x, posU.y, posU.z, _textureOffset*texturePos.x, _textureOffset*texturePos.y,

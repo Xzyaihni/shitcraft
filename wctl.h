@@ -68,7 +68,7 @@ private:
 	void chunk_loader(Vec3d<int> chunkPos);
 	void update_walls(PosWalls currChunk);
 
-	bool chunk_outside(const Vec3d<int> pos) const;
+	float chunk_outside(const Vec3d<int> pos) const;
 
 	void init_chunks();
 	

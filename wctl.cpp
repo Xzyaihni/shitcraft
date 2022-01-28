@@ -194,12 +194,11 @@ void WorldController::set_visibles()
 	}
 }
 
-bool WorldController::chunk_outside(const Vec3d<int> pos) const
+float WorldController::chunk_outside(const Vec3d<int> pos) const
 {
 	return Vec3d<int>::magnitude(
 	Vec3d<int>{std::abs(pos.x), std::abs(pos.y), std::abs(pos.z)}
-	- Vec3d<int>{std::abs(_mainCharacter->activeChunkPos.x), std::abs(_mainCharacter->activeChunkPos.y), std::abs(_mainCharacter->activeChunkPos.z)})
-	> _chunkRadius+1;
+	- Vec3d<int>{std::abs(_mainCharacter->activeChunkPos.x), std::abs(_mainCharacter->activeChunkPos.y), std::abs(_mainCharacter->activeChunkPos.z)});
 }
 
 void WorldController::range_remove()
@@ -211,7 +210,7 @@ void WorldController::range_remove()
 		
 		for(auto it = loadedChunks.begin(); it != loadedChunks.end();)
 		{
-			if(chunk_outside(it->first))
+			if(chunk_outside(it->first) > _chunkRadius+1)
 			{
 				//unload the chunk
 				it->second.remove_model();
@@ -289,7 +288,7 @@ std::map<Vec3d<int>, WorldController::UpdateChunk> WorldController::update_queue
 
 	std::lock_guard<std::mutex> lockB(_worldGen->_mtxBlockPlace);
 		
-	for(auto it = _worldGen->_blockPlaceList.begin(); it != _worldGen->_blockPlaceList.end();)
+	for(auto it = _worldGen->_blockPlaceVec.begin(); it != _worldGen->_blockPlaceVec.end();)
 	{
 		WorldGenerator::VecPos& currVecPos = *it;
 		const Vec3d<int>& currChunkPos = currVecPos.chunkPos;
@@ -357,17 +356,21 @@ std::map<Vec3d<int>, WorldController::UpdateChunk> WorldController::update_queue
 			if(currChunk.empty())
 				currChunk.set_empty(currChunk.check_empty());
 				
-			it = _worldGen->_blockPlaceList.erase(it);
 		} else
 		{
-			if(chunk_outside(currChunkPos))
-			{
-				it = _worldGen->_blockPlaceList.erase(it);
-			} else
+			if(chunk_outside(currChunkPos) <= _chunkRadius+2)
 			{
 				++it;
+				continue;
 			}
 		}
+		
+		auto newVecEnd = _worldGen->_blockPlaceVec.end()-1;
+		
+		if(newVecEnd!=it)
+			*it = std::move(*newVecEnd);
+			
+		_worldGen->_blockPlaceVec.pop_back();
 	}
 	
 	//is this a useless move? idk
