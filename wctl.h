@@ -76,7 +76,7 @@ private:
 	std::map<Vec3d<int>, WorldTypes::UpdateChunk> _queuedBlocks;
 	std::map<Vec3d<int>, WorldTypes::UpdateChunk> _chunkUpdateWalls;
 	
-	int _chunkRadius = 1;
+	int _chunkRadius = 6;
 	int _renderDist = 5;
 	
 	bool _worldCreated = false;
