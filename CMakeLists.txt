@@ -5,7 +5,6 @@ set(CMAKE_CXX_STANDARD 20)
 option(Y_DEBUG "build in debug mode" "OFF")
 option(Y_SANITIZE "build with address sanitizer" "OFF")
 set(Y_GLMPATH "/home/yanyana/cppPackages/glm" CACHE FILEPATH "path to glm library")
-set(Y_INCLUDE_DIR "./" CACHE FILEPATH "custom include directory")
 
 
 set(CMAKE_PREFIX_PATH "${Y_GLMPATH}/cmake")
@@ -31,8 +30,7 @@ else()
 	set(CMAKE_BUILD_TYPE Release)
 endif()
 
-include_directories(${Y_INCLUDE_DIR}
-${PROJECT_SOURCE_DIR}
+include_directories(${PROJECT_SOURCE_DIR}
 "${PROJECT_SOURCE_DIR}/yanderegllib")
 
 find_package(Threads REQUIRED)

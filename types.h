@@ -104,6 +104,15 @@ struct Vec3d
 		return r/l;
 	}
 	
+	Vec3d<T>& operator/=(const T& r)
+	{
+		x = x/r;
+		y = y/r;
+		z = z/r;
+	
+		return *this;
+	}
+	
 	friend std::ostream& operator<<(std::ostream& os, const Vec3d<T> r)
 	{
 		os << "[" << r.x << ",";

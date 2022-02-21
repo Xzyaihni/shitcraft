@@ -46,6 +46,27 @@ namespace WorldTypes
 		WorldTypes::TexPos down;
 	};
 	
+	struct UpdateChunk
+	{
+		bool right = true;
+		bool left = true;
+		bool up = true;
+		bool down = true;
+		bool forward = true;
+		bool back = true;
+		
+		bool walls_or() {return right || left || up || down || forward || back;};
+		void add_walls(UpdateChunk walls)
+		{
+			right = right||walls.right;
+			left = left||walls.left;
+			up = up||walls.up;
+			down = down||walls.down;
+			forward = forward||walls.forward;
+			back = back||walls.back;
+		};
+	};
+	
 	struct BlockInfo
 	{
 		bool grassy = false;

@@ -22,6 +22,8 @@
 #include "wctl.h"
 
 
+using namespace WorldTypes;
+
 class GameController
 {
 private:
@@ -37,6 +39,8 @@ public:
 	void slow_update();
 	
 	void mouse_update(int button, int state, int x, int y);
+	
+	void control_func(bool mouse, int key, int action, int mods, int scancode);
 	void keyboard_func(int key, int scancode, int action, int mods);
 	void mouse_func(int button, int action, int mods);
 	
@@ -75,6 +79,15 @@ private:
 	float _yaw = 0;
 	float _pitch = 0;
 
+	int _lookDistance = 9;
+
+	bool _lookLooking = false;
+	Vec3d<int> _lookChunk;
+	Vec3d<int> _lookBlock;
+	
+	YandereObject _lookOutline;
+	
+
 	int _chunksAmount;
 	
 	unsigned _defaultShaderID = -1;
@@ -92,6 +105,10 @@ private:
 	YandereCamera _guiCamera;
 	PhysicsController _mainPhysCtl;
 	
+	std::vector<YandereObject> _guiElements;
+	
+	std::map<std::string, unsigned> _texturesMap;
+	std::map<std::string, unsigned> _shadersMap;
 	std::map<std::string, YandereText> _textsMap;
 	
 	float _guiWidth;
@@ -119,8 +136,8 @@ GameController::GameController()
 	mouseSens = 250.0f;
 
 	_mainInit = YandereInitializer();
-	_mainInit.load_shaders_from("./shaders");
-	_mainInit.load_textures_from("./textures");
+	_shadersMap = _mainInit.load_shaders_from("./shaders");
+	_texturesMap = _mainInit.load_textures_from("./textures");
 	
 	_mainInit.load_font("./fonts/FreeSans.ttf");
 	
@@ -140,10 +157,10 @@ GameController::GameController()
 	
 	worldCtl = WorldController(&_mainInit, &_mainCharacter, &_mainCamera);
 	
-	_mainPhysCtl = PhysicsController(&worldCtl.loadedChunks);
+	_mainPhysCtl = PhysicsController(&worldCtl.worldChunks);
 	
 	_mainCharacter = Character(&_mainPhysCtl);
-	_mainCharacter.moveSpeed = 100;
+	_mainCharacter.moveSpeed = 10;
 	_mainCharacter.mass = 50;
 	_mainCharacter.floating = true;
 	_mainCharacter.position = {500, 30, 1200};
@@ -175,13 +192,13 @@ void GameController::graphics_init()
 	
 	
 	unsigned currSeed = time(NULL);
-	worldCtl.create_world(currSeed);	
+	worldCtl.create_world(_texturesMap["block_textures"], currSeed);	
 	std::cout << "world seed: " << currSeed << std::endl;
 	
 	
-	_defaultShaderID = _mainInit.create_shader_program({"defaultflat.fragment", "defaultflat.vertex"});
-	_gameObjectShaderID = _mainInit.create_shader_program({"gameobject.fragment", "gameobject.vertex"});
-	_guiShaderID = _mainInit.create_shader_program({"text.fragment", "defaultflat.vertex"});
+	_defaultShaderID = _mainInit.create_shader_program({_shadersMap["defaultflat.fragment"], _shadersMap["defaultflat.vertex"]});
+	_gameObjectShaderID = _mainInit.create_shader_program({_shadersMap["gameobject.fragment"], _shadersMap["gameobject.vertex"]});
+	_guiShaderID = _mainInit.create_shader_program({_shadersMap["text.fragment"], _shadersMap["defaultflat.vertex"]});
 	
 	_shaderGameObjPtr = _mainInit.shader_program_ptr(_gameObjectShaderID);
 	
@@ -206,7 +223,12 @@ void GameController::graphics_init()
 	
 	update_status_texts();
 	
+	_guiElements.push_back(YandereObject(&_mainInit, DefaultModel::square, _texturesMap["crosshair"], {{0, 0, 0}, {25, 25, 1}}));
+	
 	_mainCharacter.activeChunkPos = {0, 0, 0};
+	
+	_lookOutline = YandereObject(&_mainInit, DefaultModel::cube, DefaultTexture::solid, {{}, {0.5f, 0.5f, 0.5f}}, {1, 1, 1, 0.2f});
+	
 	
 	_lastFrameTime = glfwGetTime();
 }
@@ -239,6 +261,12 @@ void GameController::draw_update()
 	
 	worldCtl.draw_update();
 	
+	if(_lookLooking)
+	{
+		glClear(GL_DEPTH_BUFFER_BIT);
+		
+		_lookOutline.draw_update();
+	}
 	
 	_mainInit.set_shader_program(_guiShaderID);
 	_mainInit.set_draw_camera(&_guiCamera);
@@ -246,6 +274,11 @@ void GameController::draw_update()
 	for(auto& [name, text] : _textsMap)
 	{
 		text.draw_update();
+	}
+	
+	for(auto& element : _guiElements)
+	{
+		element.draw_update();
 	}
 	
 	glfwSwapBuffers(_mainWindow);
@@ -320,10 +353,27 @@ void GameController::update_func()
 	currAccel = vecLength!=0 ? currAccel/Vec3d<float>::magnitude(currAccel) : Vec3d<float>{0, 0, 0};
 	
 	//the magical force controlling the character
-	_mainCharacter.force = ((currAccel*_mainCharacter.moveSpeed) - _mainCharacter.velocity) * 100;
+	_mainCharacter.force = ((currAccel*_mainCharacter.moveSpeed) - _mainCharacter.velocity) * 500;
 	
 	
 	_mainPhysCtl.physics_update(_timeDelta);
+	
+	RaycastResult currRaycast = _mainPhysCtl.raycast(_mainCharacter.position, _mainCharacter.direction, _lookDistance*3);
+	if(currRaycast.direction!=Direction::none && _mainPhysCtl.raycast_distance(_mainCharacter.position, currRaycast)<_lookDistance)
+	{
+		_lookLooking = true;
+		_lookChunk = currRaycast.chunk;
+		_lookBlock = currRaycast.block;
+			
+		YanPosition lookPos = {static_cast<float>(_lookChunk.x)*chunkSize+_lookBlock.x+0.5f, 
+		static_cast<float>(_lookChunk.y)*chunkSize+_lookBlock.y+0.5f, 
+		static_cast<float>(_lookChunk.z)*chunkSize+_lookBlock.z+0.5f};
+			
+		_lookOutline.set_position(lookPos);
+	} else
+	{
+		_lookLooking = false;
+	}
 	
 	_shaderGameObjPtr->set_prop(_shaderPlayerPosLoc, YVec3{_mainCharacter.position.x, _mainCharacter.position.y, _mainCharacter.position.z});
 	
@@ -359,7 +409,7 @@ void GameController::mousepos_update(int x, int y)
 	
 	_mainCamera.set_rotation(_yaw, _pitch);
 	
-	_mainCharacter.directionVec = PhysicsController::calc_dir(_yaw, _pitch);
+	_mainCharacter.direction = PhysicsController::calc_dir(_yaw, _pitch);
 	
 	if(_mouseLocked)
 	{
@@ -373,7 +423,7 @@ void GameController::mousepos_update(int x, int y)
 	}
 }
 
-void GameController::keyboard_func(int key, int scancode, int action, int mods)
+void GameController::control_func(bool mouse, int key, int action, int mods, int scancode)
 {
 	if(key==GLFW_KEY_ESCAPE && action==GLFW_PRESS)
 	{
@@ -391,14 +441,30 @@ void GameController::keyboard_func(int key, int scancode, int action, int mods)
 			_lastMouseY = static_cast<int>(yPos);
 		}
 	}
+	
+	if(mouse && key==GLFW_MOUSE_BUTTON_LEFT && action==GLFW_PRESS)
+	{
+		//destroy a block
+		auto iter = worldCtl.worldChunks.find(_lookChunk);
+		if(_lookLooking && iter!=worldCtl.worldChunks.end())
+		{
+			WorldChunk& currChunk = iter->second;
+		
+			currChunk.block(_lookBlock).blockType = Block::air;
+			worldCtl.chunk_update_full(currChunk, _lookBlock);
+		}
+	}
+}
+
+
+void GameController::keyboard_func(int key, int scancode, int action, int mods)
+{
+	control_func(false, key, action, mods, scancode);
 }
 
 void GameController::mouse_func(int button, int action, int mods)
 {
-	if(button==GLFW_MOUSE_BUTTON_LEFT && action==GLFW_PRESS)
-	{
-		
-	}
+	control_func(true, button, action, mods, 0);
 }
 
 void GameController::resize_func(int width, int height)

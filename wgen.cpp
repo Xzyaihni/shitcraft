@@ -33,9 +33,10 @@ WorldGenerator::WorldGenerator()
 {
 }
 
-WorldGenerator::WorldGenerator(YandereInitializer* init, std::string atlasName) : _init(init),
-atlasName(atlasName), _texAtlas(init->_textureMap[atlasName].width(), init->_textureMap[atlasName].height())
+WorldGenerator::WorldGenerator(YandereInitializer* init, unsigned atlasTextureID) : _init(init),
+atlasTextureID(atlasTextureID)
 {
+	_texAtlas = BlockTexAtlas(init->texture(atlasTextureID).width(), init->texture(atlasTextureID).height());
 	_texAtlas.set_horizontal_blocks(8);
 	_texAtlas.set_vertical_blocks(8);
 }
@@ -249,7 +250,7 @@ void WorldGenerator::gen_plants(WorldChunk& genChunk, std::array<ClimatePoint, c
 							
 						for(int i = 0; i < cactusHeight; ++i)
 						{
-							genChunk.shared_place({groundPos.x, groundPos.y+i, groundPos.z}, WorldBlock{Block::cactus});
+							shared_place(genChunk, {groundPos.x, groundPos.y+i, groundPos.z}, WorldBlock{Block::cactus});
 						}
 					}
 					break;
@@ -271,7 +272,7 @@ void WorldGenerator::gen_plants(WorldChunk& genChunk, std::array<ClimatePoint, c
 						
 						for(int i = 0; i < treeHeight; ++i)
 						{
-							genChunk.shared_place({groundPos.x, groundPos.y+i, groundPos.z}, WorldBlock{Block::log});
+							shared_place(genChunk, {groundPos.x, groundPos.y+i, groundPos.z}, WorldBlock{Block::log});
 							
 							int nearestSquare = (std::clamp(treeHeight-i, 0, 2))*2+1;
 							
@@ -284,12 +285,12 @@ void WorldGenerator::gen_plants(WorldChunk& genChunk, std::array<ClimatePoint, c
 									if(tx-halfSquare==0 && ty-halfSquare==0)
 										continue;
 									
-									genChunk.shared_place({groundPos.x+tx-halfSquare, groundPos.y+i+1, groundPos.z+ty-halfSquare}, WorldBlock{Block::leaf});
+									shared_place(genChunk, {groundPos.x+tx-halfSquare, groundPos.y+i+1, groundPos.z+ty-halfSquare}, WorldBlock{Block::leaf});
 								}
 							}
 						}
 						
-						genChunk.shared_place({groundPos.x, groundPos.y+treeHeight, groundPos.z}, WorldBlock{Block::leaf});
+						shared_place(genChunk, {groundPos.x, groundPos.y+treeHeight, groundPos.z}, WorldBlock{Block::leaf});
 					}
 					break;
 				}
@@ -304,12 +305,32 @@ void WorldGenerator::gen_plants(WorldChunk& genChunk, std::array<ClimatePoint, c
 }
 
 
-void WorldGenerator::place_in_chunk(Vec3d<int> originalPos, Vec3d<int> chunkPos, Vec3d<int> blockPos, WorldBlock block)
+void WorldGenerator::shared_place(WorldChunk& chunk, Vec3d<int> position, WorldBlock block)
+{
+	if(position.x<0 || position.y<0 || position.z<0
+	|| position.x>(chunkSize-1) || position.y>(chunkSize-1) || position.z>(chunkSize-1))
+	{
+		//outside of current chunk
+		Vec3d<int> placeChunk = WorldChunk::active_chunk(position);
+		Vec3d<int> newPos = position-placeChunk*chunkSize;
+		
+		place_in_chunk(chunk.position()+placeChunk,
+		UpdateChunk{position.x%chunkSize==chunkSize-1, position.x%chunkSize==0,
+		position.y%chunkSize==chunkSize-1, position.y%chunkSize==0,
+		position.z%chunkSize==chunkSize-1, position.z%chunkSize==0},
+		newPos, block);
+	} else
+	{
+		chunk.block(position) = block;
+	}
+}
+
+void WorldGenerator::place_in_chunk(Vec3d<int> chunkPos, UpdateChunk walls, Vec3d<int> blockPos, WorldBlock block)
 {
 	std::lock_guard<std::mutex> lockB(_mtxBlockPlace);
 
 	_blockPlaceVec.reserve(1);
-	_blockPlaceVec.emplace_back(chunkPos, originalPos, blockPos, block);
+	_blockPlaceVec.emplace_back(chunkPos, walls, blockPos, block);
 }
 
 void WorldGenerator::place_in_chunk(std::vector<VecPos>& blocks)

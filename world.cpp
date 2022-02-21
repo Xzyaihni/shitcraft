@@ -20,9 +20,12 @@ WorldChunk::WorldChunk(WorldGenerator* wGen, Vec3d<int> pos) : _wGen(wGen), _pos
 	_textureVBlocks = wGen->_texAtlas._verticalBlocks;
 	_textureOffset = wGen->_texAtlas._texOffset;
 
-	_modelName = model_name(_position);
-	
-	_chunkModel = YandereModel{};
+	_modelID = _wGen->_init->add_model(YandereModel{});
+}
+
+unsigned WorldChunk::modelID()
+{
+	return _modelID;
 }
 
 bool WorldChunk::has_transparent()
@@ -76,22 +79,6 @@ void WorldChunk::update_states()
 	{
 			block.update();
 	});
-}
-
-void WorldChunk::shared_place(Vec3d<int> position, WorldBlock block)
-{
-	if(position.x<0 || position.y<0 || position.z<0
-	|| position.x>(chunkSize-1) || position.y>(chunkSize-1) || position.z>(chunkSize-1))
-	{
-		//outside of current chunk
-		Vec3d<int> placeChunk = active_chunk(position);
-		Vec3d<int> newPos = position-placeChunk*chunkSize;
-		
-		_wGen->place_in_chunk(_position, _position+placeChunk, newPos, block);
-	} else
-	{
-		this->block(position) = block;
-	}
 }
 
 Vec3d<int> WorldChunk::active_chunk(Vec3d<int> pos)
@@ -170,10 +157,13 @@ Vec3d<int> WorldChunk::active_chunk(Vec3d<float> pos)
 
 void WorldChunk::update_mesh()
 {
-	if(_empty)
-		return;
-
 	_chunkModel = YandereModel();
+
+	if(_empty)
+	{
+		apply_model();
+		return;
+	}
 		
 	_indexOffset = 0;
 		
@@ -197,7 +187,9 @@ void WorldChunk::update_mesh()
 		}
 	}
 	
-	if(airAmount==chunkSize)
+	apply_model();
+	
+	if(airAmount==chunkSize*chunkSize*chunkSize)
 	{
 		_empty = true;
 		return;
@@ -220,46 +212,44 @@ void WorldChunk::update_block_walls(const Vec3d<int> pos, const int index) const
 	
 	const Vec3d<float> posU = Vec3dCVT<float>(pos)*blockModelSize;
 	
-	if((pos.z!=(chunkSize-1)) && _chunkBlocks[index+1].transparent() && (bCurr != _chunkBlocks[index+1].blockType))
+	if(pos.z!=(chunkSize-1) && _chunkBlocks[index+1].transparent() && (bCurr != _chunkBlocks[index+1].blockType))
 		a_forwardFace(posU, currText.forward);
 	
-	if((pos.z!=0) && _chunkBlocks[index-1].transparent() && (bCurr != _chunkBlocks[index-1].blockType))
+	if(pos.z!=0 && _chunkBlocks[index-1].transparent() && (bCurr != _chunkBlocks[index-1].blockType))
 		a_backFace(posU, currText.back);
 
-	if((pos.y!=(chunkSize-1)) && _chunkBlocks[index+chunkSize].transparent() && (bCurr != _chunkBlocks[index+chunkSize].blockType))
+	if(pos.y!=(chunkSize-1) && _chunkBlocks[index+chunkSize].transparent() && (bCurr != _chunkBlocks[index+chunkSize].blockType))
 		a_upFace(posU, currText.up);
 
-	if((pos.y!=0) && _chunkBlocks[index-chunkSize].transparent() && (bCurr != _chunkBlocks[index-chunkSize].blockType))
+	if(pos.y!=0 && _chunkBlocks[index-chunkSize].transparent() && (bCurr != _chunkBlocks[index-chunkSize].blockType))
 		a_downFace(posU, currText.down);
 
-	if((pos.x!=(chunkSize-1)) && _chunkBlocks[index+chunkSize*chunkSize].transparent() && (bCurr != _chunkBlocks[index+chunkSize*chunkSize].blockType))
+	if(pos.x!=(chunkSize-1) && _chunkBlocks[index+chunkSize*chunkSize].transparent() && (bCurr != _chunkBlocks[index+chunkSize*chunkSize].blockType))
 		a_rightFace(posU, currText.right);
 
-	if((pos.x!=0) && _chunkBlocks[index-chunkSize*chunkSize].transparent() && (bCurr != _chunkBlocks[index-chunkSize*chunkSize].blockType))
+	if(pos.x!=0 && _chunkBlocks[index-chunkSize*chunkSize].transparent() && (bCurr != _chunkBlocks[index-chunkSize*chunkSize].blockType))
 		a_leftFace(posU, currText.left);
 }
 
 void WorldChunk::apply_model()
 {
 	assert(_wGen!=nullptr);
-
-	if(!_empty)
-		_wGen->_init->_modelMap[_modelName] = _chunkModel;
+	
+	_wGen->_init->set_model(_modelID, _chunkModel);
 }
 
 void WorldChunk::remove_model()
 {
 	assert(_wGen!=nullptr);
 	
-	if(!_empty)
-		_wGen->_init->_modelMap.erase(_modelName);
+	_wGen->_init->remove_model(_modelID);
 		
 	_empty = true;
 }
 
 void WorldChunk::update_wall(Direction wall, WorldChunk& checkChunk)
 {
-	if(_empty || checkChunk.empty())
+	if(_empty)
 		return;
 		
 
@@ -276,8 +266,8 @@ void WorldChunk::update_wall(Direction wall, WorldChunk& checkChunk)
 				{
 					if(_chunkBlocks[blockIndex].blockType!=Block::air)
 					{
-						if(checkChunk._chunkBlocks[blockIndex-startingIndex].transparent()
-						&& (_chunkBlocks[blockIndex].blockType != checkChunk._chunkBlocks[blockIndex-startingIndex].blockType))
+						if(checkChunk.empty() || (checkChunk._chunkBlocks[blockIndex-startingIndex].transparent()
+						&& (_chunkBlocks[blockIndex].blockType != checkChunk._chunkBlocks[blockIndex-startingIndex].blockType)))
 							a_rightFace(Vec3dCVT<float>(chunkSize-1, y, z)*blockModelSize, _chunkBlocks[blockIndex].texture().right);
 					}
 				}
@@ -296,8 +286,8 @@ void WorldChunk::update_wall(Direction wall, WorldChunk& checkChunk)
 				{
 					if(_chunkBlocks[blockIndex-startingIndex].blockType!=Block::air)
 					{
-						if(checkChunk._chunkBlocks[blockIndex].transparent()
-						&& (_chunkBlocks[blockIndex-startingIndex].blockType != checkChunk._chunkBlocks[blockIndex].blockType))
+						if(checkChunk.empty() || (checkChunk._chunkBlocks[blockIndex].transparent()
+						&& (_chunkBlocks[blockIndex-startingIndex].blockType != checkChunk._chunkBlocks[blockIndex].blockType)))
 							a_leftFace(Vec3dCVT<float>(0, y, z)*blockModelSize, _chunkBlocks[blockIndex-startingIndex].texture().left);
 					}
 				}
@@ -316,8 +306,8 @@ void WorldChunk::update_wall(Direction wall, WorldChunk& checkChunk)
 					
 					if(blockCurr->blockType!=Block::air)
 					{
-						if(blockCheck->transparent()
-						&& (blockCurr->blockType != blockCheck->blockType))
+						if(checkChunk.empty() || (blockCheck->transparent()
+						&& (blockCurr->blockType != blockCheck->blockType)))
 							a_upFace(Vec3dCVT<float>(x, chunkSize-1, z)*blockModelSize, blockCurr->texture().up);
 					}
 				}
@@ -336,8 +326,8 @@ void WorldChunk::update_wall(Direction wall, WorldChunk& checkChunk)
 				
 					if(blockCurr->blockType!=Block::air)
 					{
-						if(blockCheck->transparent()
-						&& (blockCurr->blockType != blockCheck->blockType))
+						if(checkChunk.empty() || (blockCheck->transparent()
+						&& (blockCurr->blockType != blockCheck->blockType)))
 							a_downFace(Vec3dCVT<float>(x, 0, z)*blockModelSize, blockCurr->texture().down);
 					}
 				}
@@ -355,8 +345,8 @@ void WorldChunk::update_wall(Direction wall, WorldChunk& checkChunk)
 				{
 					if(_chunkBlocks[blockIndex+chunkSize-1].blockType!=Block::air)
 					{
-						if(checkChunk._chunkBlocks[blockIndex].transparent()
-						&& (_chunkBlocks[blockIndex+chunkSize-1].blockType != checkChunk._chunkBlocks[blockIndex].blockType))
+						if(checkChunk.empty() || (checkChunk._chunkBlocks[blockIndex].transparent()
+						&& (_chunkBlocks[blockIndex+chunkSize-1].blockType != checkChunk._chunkBlocks[blockIndex].blockType)))
 							a_forwardFace(Vec3dCVT<float>(x, y, chunkSize-1)*blockModelSize, _chunkBlocks[blockIndex+chunkSize-1].texture().forward);
 					}
 				}
@@ -374,8 +364,8 @@ void WorldChunk::update_wall(Direction wall, WorldChunk& checkChunk)
 				{
 					if(_chunkBlocks[blockIndex].blockType!=Block::air)
 					{
-						if(checkChunk._chunkBlocks[blockIndex+chunkSize-1].transparent()
-						&& (_chunkBlocks[blockIndex].blockType != checkChunk._chunkBlocks[blockIndex+chunkSize-1].blockType))
+						if(checkChunk.empty() || (checkChunk._chunkBlocks[blockIndex+chunkSize-1].transparent()
+						&& (_chunkBlocks[blockIndex].blockType != checkChunk._chunkBlocks[blockIndex+chunkSize-1].blockType)))
 							a_backFace(Vec3dCVT<float>(x, y, 0)*blockModelSize, _chunkBlocks[blockIndex].texture().back);
 					}
 				}
@@ -383,6 +373,8 @@ void WorldChunk::update_wall(Direction wall, WorldChunk& checkChunk)
 			break;
 		}
 	}
+	
+	apply_model();
 }
 
 
@@ -462,7 +454,7 @@ void WorldChunk::a_downFace(const Vec3d<float> posU, const WorldTypes::TexPos te
 
 Vec3d<int> WorldChunk::closest_block(Vec3d<float> pos)
 {
-	return {static_cast<int>(std::round(pos.x)), static_cast<int>(std::round(pos.y)), static_cast<int>(std::round(pos.z))};
+	return {static_cast<int>(pos.x), static_cast<int>(pos.y), static_cast<int>(pos.z)};
 }
 
 WorldBlock& WorldChunk::block(Vec3d<int> pos)
@@ -498,15 +490,4 @@ Vec3d<int> &WorldChunk::position()
 WorldChunk::ChunkBlocks& WorldChunk::blocks()
 {
 	return _chunkBlocks;
-}
-
-std::string WorldChunk::model_name(const Vec3d<int> pos)
-{
-	std::string chunkModelName = "!cHUNK" + std::to_string(pos.x);
-	chunkModelName += '_';
-	chunkModelName += std::to_string(pos.y);
-	chunkModelName += '_';
-	chunkModelName += std::to_string(pos.z);
-	
-	return chunkModelName;
 }

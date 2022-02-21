@@ -41,7 +41,7 @@ protected:
 	struct VecPos
 	{
 		Vec3d<int> chunkPos;
-		Vec3d<int> originalPos;
+		WorldTypes::UpdateChunk walls;
 		Vec3d<int> blockPos;
 		WorldBlock block;
 	};
@@ -50,7 +50,7 @@ public:
 	typedef std::array<WorldTypes::ClimatePoint, chunkSize*chunkSize> ClimateNoise;
 
 	WorldGenerator();
-	WorldGenerator(YandereInitializer* init, std::string atlasName);
+	WorldGenerator(YandereInitializer* init, unsigned atlasTextureID);
 	
 	void seed(unsigned seed);
 	
@@ -63,10 +63,12 @@ public:
 	
 	Vec3d<int> get_ground(WorldChunk& checkChunk, int x, int z);
 	
-	void place_in_chunk(Vec3d<int> originalPos, Vec3d<int> chunkPos, Vec3d<int> blockPos, WorldBlock block);
+	void shared_place(WorldChunk& chunk, Vec3d<int> position, WorldBlock block);
+	
+	void place_in_chunk(Vec3d<int> chunkPos, WorldTypes::UpdateChunk walls, Vec3d<int> blockPos, WorldBlock block);
 	void place_in_chunk(std::vector<VecPos>& blocks);
 	
-	std::string atlasName;
+	unsigned atlasTextureID;
 
 protected:
 	std::mutex _mtxBlockPlace;

@@ -4,11 +4,13 @@
 #include <array>
 #include <vector>
 #include <map>
+#include <mutex>
 
 #include "types.h"
 
 class WorldChunk;
 class PhysicsController;
+
 
 struct RaycastResult
 {
@@ -31,7 +33,7 @@ public:
 	Vec3d<float> rotationAxis = {1, 0, 0};
 	float rotation = 0;
 	
-	Vec3d<float> directionVec = {0, 0, 0};
+	Vec3d<float> direction = {0, 0, 0};
 	
 	Vec3d<int> activeChunkPos;
 	
@@ -60,7 +62,10 @@ public:
 	
 	void physics_update(double timeDelta);
 	
+	RaycastResult raycast(Vec3d<float> startPos, Vec3d<float> direction, int length);
 	RaycastResult raycast(Vec3d<float> startPos, Vec3d<float> endPos);
+	
+	int raycast_distance(Vec3d<float> rayStart, RaycastResult raycast);
 	
 	std::vector<std::reference_wrapper<PhysicsObject>> physObjs;
 	
