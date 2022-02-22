@@ -17,6 +17,7 @@ public:
 	WorldChunk() {};
 	WorldChunk(WorldGenerator* wGen, Vec3d<int> pos);
 	
+	void create_mesh();
 	unsigned modelID();
 	
 	void update_mesh();
@@ -68,6 +69,7 @@ private:
 	Vec3d<int> _position;
 	
 	bool _empty = true;
+	bool _modelCreated = false;
 	
 	int _plantsAmount = 0;
 	

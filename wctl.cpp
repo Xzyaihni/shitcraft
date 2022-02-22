@@ -240,6 +240,8 @@ void WorldController::update_walls(std::map<Vec3d<int>, UpdateChunk>::iterator i
 
 void WorldController::chunk_loader(const Vec3d<int> chunkPos)
 {
+	unsigned chunkModelID;
+		
 	WorldChunk genChunk(_worldGen.get(), chunkPos);
 	_worldGen->chunk_gen(genChunk);
 	
@@ -334,6 +336,7 @@ void WorldController::add_chunks()
 				_queuedBlocks.erase(chunkPos);
 			}
 	
+			chunk.create_mesh();
 			_initializeChunks.push(chunkPos);
 			worldChunks.emplace(chunkPos, std::move(chunk));
 

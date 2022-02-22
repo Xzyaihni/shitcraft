@@ -12,15 +12,22 @@
 using namespace WorldTypes;
 
 
-WorldChunk::WorldChunk(WorldGenerator* wGen, Vec3d<int> pos) : _wGen(wGen), _position(pos)
+WorldChunk::WorldChunk(WorldGenerator* wGen, Vec3d<int> pos) : _wGen(wGen), _position(pos), _chunkModel()
 {
 	_textureWidth = wGen->_texAtlas._width;
 	_textureHeight = wGen->_texAtlas._height;
 	_textureHBlocks = wGen->_texAtlas._horizontalBlocks;
 	_textureVBlocks = wGen->_texAtlas._verticalBlocks;
 	_textureOffset = wGen->_texAtlas._texOffset;
+}
 
-	_modelID = _wGen->_init->add_model(YandereModel{});
+void WorldChunk::create_mesh()
+{
+	if(!_modelCreated)
+	{
+		_modelID = _wGen->_init->add_model(_chunkModel);
+		_modelCreated = true;
+	}
 }
 
 unsigned WorldChunk::modelID()
@@ -235,7 +242,8 @@ void WorldChunk::apply_model()
 {
 	assert(_wGen!=nullptr);
 	
-	_wGen->_init->set_model(_modelID, _chunkModel);
+	if(_modelCreated)
+		_wGen->_init->set_model(_modelID, _chunkModel);
 }
 
 void WorldChunk::remove_model()
