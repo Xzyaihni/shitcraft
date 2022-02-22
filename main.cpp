@@ -81,11 +81,11 @@ private:
 
 	int _lookDistance = 9;
 
-	bool _lookLooking = false;
+	Direction _lookDirection = Direction::none;
 	Vec3d<int> _lookChunk;
 	Vec3d<int> _lookBlock;
 	
-	YandereObject _lookOutline;
+	YandereObject _lookPlane;
 	
 
 	int _chunksAmount;
@@ -227,7 +227,7 @@ void GameController::graphics_init()
 	
 	_mainCharacter.activeChunkPos = {0, 0, 0};
 	
-	_lookOutline = YandereObject(&_mainInit, DefaultModel::cube, DefaultTexture::solid, {{}, {0.5f, 0.5f, 0.5f}}, {1, 1, 1, 0.2f});
+	_lookPlane = YandereObject(&_mainInit, DefaultModel::square, DefaultTexture::solid, {{}, {0.5f, 0.5f, 0.5f}}, {1, 1, 1, 0.2f});
 	
 	
 	_lastFrameTime = glfwGetTime();
@@ -261,13 +261,14 @@ void GameController::draw_update()
 	
 	worldCtl.draw_update();
 	
-	if(_lookLooking)
+	if(_lookDirection!=Direction::none)
 	{
 		glClear(GL_DEPTH_BUFFER_BIT);
-		
-		_lookOutline.draw_update();
+	
+		_lookPlane.draw_update();
 	}
 	
+	glClear(GL_DEPTH_BUFFER_BIT);
 	_mainInit.set_shader_program(_guiShaderID);
 	_mainInit.set_draw_camera(&_guiCamera);
 	
@@ -361,18 +362,66 @@ void GameController::update_func()
 	RaycastResult currRaycast = _mainPhysCtl.raycast(_mainCharacter.position, _mainCharacter.direction, _lookDistance*3);
 	if(currRaycast.direction!=Direction::none && _mainPhysCtl.raycast_distance(_mainCharacter.position, currRaycast)<_lookDistance)
 	{
-		_lookLooking = true;
+		_lookDirection = currRaycast.direction;
 		_lookChunk = currRaycast.chunk;
 		_lookBlock = currRaycast.block;
-			
+		
 		YanPosition lookPos = {static_cast<float>(_lookChunk.x)*chunkSize+_lookBlock.x+0.5f, 
-		static_cast<float>(_lookChunk.y)*chunkSize+_lookBlock.y+0.5f, 
-		static_cast<float>(_lookChunk.z)*chunkSize+_lookBlock.z+0.5f};
+				static_cast<float>(_lookChunk.y)*chunkSize+_lookBlock.y+0.5f, 
+				static_cast<float>(_lookChunk.z)*chunkSize+_lookBlock.z+0.5f};
+				
+		switch(_lookDirection)
+		{
+			case Direction::right:
+				lookPos = {lookPos.x-0.5f, lookPos.y, lookPos.z};
 			
-		_lookOutline.set_position(lookPos);
+				_lookPlane.set_rotation_axis(YanPosition{0, 1, 0});
+				_lookPlane.set_rotation(-M_PI/2);
+			break;
+		
+			case Direction::left:
+				lookPos = {lookPos.x+0.5f, lookPos.y, lookPos.z};
+			
+				_lookPlane.set_rotation_axis(YanPosition{0, 1, 0});
+				_lookPlane.set_rotation(M_PI/2);
+			break;
+			
+			case Direction::up:
+				lookPos = {lookPos.x, lookPos.y-0.5f, lookPos.z};
+			
+				_lookPlane.set_rotation_axis(YanPosition{1, 0, 0});
+				_lookPlane.set_rotation(M_PI/2);
+			break;
+			
+			case Direction::down:
+				lookPos = {lookPos.x, lookPos.y+0.5f, lookPos.z};
+			
+				_lookPlane.set_rotation_axis(YanPosition{1, 0, 0});
+				_lookPlane.set_rotation(-M_PI/2);
+			break;
+			
+			case Direction::forward:
+				lookPos = {lookPos.x, lookPos.y, lookPos.z-0.5f};
+			
+				_lookPlane.set_rotation_axis(YanPosition{0, 1, 0});
+				_lookPlane.set_rotation(M_PI);
+			break;
+			
+			case Direction::back:
+				lookPos = {lookPos.x, lookPos.y, lookPos.z+0.5f};
+			
+				_lookPlane.set_rotation_axis(YanPosition{0, 1, 0});
+				_lookPlane.set_rotation(0);
+			break;
+			
+			default:
+			break;
+		}
+		
+		_lookPlane.set_position(lookPos);
 	} else
 	{
-		_lookLooking = false;
+		_lookDirection = Direction::none;
 	}
 	
 	_shaderGameObjPtr->set_prop(_shaderPlayerPosLoc, YVec3{_mainCharacter.position.x, _mainCharacter.position.y, _mainCharacter.position.z});
@@ -446,7 +495,7 @@ void GameController::control_func(bool mouse, int key, int action, int mods, int
 	{
 		//destroy a block
 		auto iter = worldCtl.worldChunks.find(_lookChunk);
-		if(_lookLooking && iter!=worldCtl.worldChunks.end())
+		if(_lookDirection!=Direction::none && iter!=worldCtl.worldChunks.end())
 		{
 			WorldChunk& currChunk = iter->second;
 		
