@@ -4,10 +4,7 @@ set(CMAKE_CXX_STANDARD 20)
 
 option(Y_DEBUG "build in debug mode" "OFF")
 option(Y_SANITIZE "build with address sanitizer" "OFF")
-set(Y_GLMPATH "/home/yanyana/cppPackages/glm" CACHE FILEPATH "path to glm library")
 
-
-set(CMAKE_PREFIX_PATH "${Y_GLMPATH}/cmake")
 set(YANDERELIBS "yanderegllib/glcyan.cpp"
 "yanderegllib/yanconv.cpp")
 
