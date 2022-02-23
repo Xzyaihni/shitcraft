@@ -303,23 +303,23 @@ void GameController::update_func()
 	Vec3d<float> currAccel = {0, 0, 0};
 	if(glfwGetKey(_mainWindow, controlKeys[YKey::forward]))
 	{
-		currAccel.z += std::sin(_yaw);
-		currAccel.x += std::cos(_yaw);
+		currAccel.z += std::sin(_yaw) * _mainCharacter.moveSpeed;
+		currAccel.x += std::cos(_yaw) * _mainCharacter.moveSpeed;
 	}
 	if(glfwGetKey(_mainWindow, controlKeys[YKey::back]))
 	{
-		currAccel.z -= std::sin(_yaw);
-		currAccel.x -= std::cos(_yaw);
+		currAccel.z -= std::sin(_yaw) * _mainCharacter.moveSpeed;
+		currAccel.x -= std::cos(_yaw) * _mainCharacter.moveSpeed;
 	}
 	if(glfwGetKey(_mainWindow, controlKeys[YKey::right]))
 	{
-		currAccel.z += std::cos(_yaw);
-		currAccel.x += -std::sin(_yaw);
+		currAccel.z += std::cos(_yaw) * _mainCharacter.moveSpeed;
+		currAccel.x += -std::sin(_yaw) * _mainCharacter.moveSpeed;
 	}
 	if(glfwGetKey(_mainWindow, controlKeys[YKey::left]))
 	{
-		currAccel.z -= std::cos(_yaw);
-		currAccel.x -= -std::sin(_yaw);
+		currAccel.z -= std::cos(_yaw) * _mainCharacter.moveSpeed;
+		currAccel.x -= -std::sin(_yaw) * _mainCharacter.moveSpeed;
 	}
 	
 	if(glfwGetKey(_mainWindow, controlKeys[YKey::jump]))
@@ -332,7 +332,7 @@ void GameController::update_func()
 			_mainCharacter.onGround = false;
 		} else if(_mainCharacter.floating)
 		{
-			currAccel.y += 1;
+			currAccel.y += _mainCharacter.moveSpeed/2;
 		}
 	}
 	
@@ -343,18 +343,15 @@ void GameController::update_func()
 			_mainCharacter.sneaking = true;
 		} else
 		{
-			currAccel.y -= 1;
+			currAccel.y -= _mainCharacter.moveSpeed/2;
 		}
 	} else
 	{
 		_mainCharacter.sneaking = false;
 	}
 	
-	float vecLength = Vec3d<float>::magnitude(currAccel);
-	currAccel = vecLength!=0 ? currAccel/Vec3d<float>::magnitude(currAccel) : Vec3d<float>{0, 0, 0};
-	
 	//the magical force controlling the character
-	_mainCharacter.force = ((currAccel*_mainCharacter.moveSpeed) - _mainCharacter.velocity) * 500;
+	_mainCharacter.velocity = currAccel;
 	
 	
 	_mainPhysCtl.physics_update(_timeDelta);
