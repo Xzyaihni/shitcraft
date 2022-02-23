@@ -118,7 +118,7 @@ void WorldController::update_walls(std::map<Vec3d<int>, UpdateChunk>::iterator i
 	auto backIter = worldChunks.find({chunkPos.x, chunkPos.y, chunkPos.z-1});
 	
 	
-	if(leftIter!=worldChunks.end())
+	if(walls.left && leftIter!=worldChunks.end())
 	{
 		auto leftWallsIter = _chunkUpdateWalls.find({chunkPos.x-1, chunkPos.y, chunkPos.z});
 		
@@ -129,7 +129,7 @@ void WorldController::update_walls(std::map<Vec3d<int>, UpdateChunk>::iterator i
 		}
 	}
 	
-	if(rightIter!=worldChunks.end())
+	if(walls.right && rightIter!=worldChunks.end())
 	{
 		auto rightWallsIter = _chunkUpdateWalls.find({chunkPos.x+1, chunkPos.y, chunkPos.z});
 		
@@ -140,7 +140,7 @@ void WorldController::update_walls(std::map<Vec3d<int>, UpdateChunk>::iterator i
 		}
 	}
 	
-	if(downIter!=worldChunks.end())
+	if(walls.down && downIter!=worldChunks.end())
 	{
 		auto downWallsIter = _chunkUpdateWalls.find({chunkPos.x, chunkPos.y-1, chunkPos.z});
 		
@@ -151,7 +151,7 @@ void WorldController::update_walls(std::map<Vec3d<int>, UpdateChunk>::iterator i
 		}
 	}
 	
-	if(upIter!=worldChunks.end())
+	if(walls.up && upIter!=worldChunks.end())
 	{
 		auto upWallsIter = _chunkUpdateWalls.find({chunkPos.x, chunkPos.y+1, chunkPos.z});
 		
@@ -162,7 +162,7 @@ void WorldController::update_walls(std::map<Vec3d<int>, UpdateChunk>::iterator i
 		}
 	}
 	
-	if(backIter!=worldChunks.end())
+	if(walls.back && backIter!=worldChunks.end())
 	{
 		auto backWallsIter = _chunkUpdateWalls.find({chunkPos.x, chunkPos.y, chunkPos.z-1});
 		
@@ -173,7 +173,7 @@ void WorldController::update_walls(std::map<Vec3d<int>, UpdateChunk>::iterator i
 		}
 	}
 	
-	if(forwardIter!=worldChunks.end())
+	if(walls.forward && forwardIter!=worldChunks.end())
 	{
 		auto forwardWallsIter = _chunkUpdateWalls.find({chunkPos.x, chunkPos.y, chunkPos.z+1});
 		
@@ -185,54 +185,50 @@ void WorldController::update_walls(std::map<Vec3d<int>, UpdateChunk>::iterator i
 	}
 	
 	
-	if(currChunk.empty())
+	if(!currChunk.empty())
 	{
-		_chunkUpdateWalls.erase(iter);
-		return;
-	}
-	
-	//right wall
-	if(walls.right && rightIter!=worldChunks.end())
-	{
-		walls.right = false;
-		currChunk.update_wall(Direction::right, rightIter->second);
-	}
+		//right wall
+		if(walls.right && rightIter!=worldChunks.end())
+		{
+			walls.right = false;
+			currChunk.update_wall(Direction::right, rightIter->second);
+		}
+			
+		//left wall
+		if(walls.left && leftIter!=worldChunks.end())
+		{
+			walls.left = false;
+			currChunk.update_wall(Direction::left, leftIter->second);
+		}
 		
-	//left wall
-	if(walls.left && leftIter!=worldChunks.end())
-	{
-		walls.left = false;
-		currChunk.update_wall(Direction::left, leftIter->second);
+		//up wall
+		if(walls.up && upIter!=worldChunks.end())
+		{
+			walls.up = false;
+			currChunk.update_wall(Direction::up, upIter->second);
+		}
+		
+		//down wall
+		if(walls.down && downIter!=worldChunks.end())
+		{
+			walls.down = false;
+			currChunk.update_wall(Direction::down, downIter->second);
+		}
+		
+		//forward wall
+		if(walls.forward && forwardIter!=worldChunks.end())
+		{
+			walls.forward = false;
+			currChunk.update_wall(Direction::forward, forwardIter->second);
+		}
+		
+		//back wall
+		if(walls.back && backIter!=worldChunks.end())
+		{
+			walls.back = false;
+			currChunk.update_wall(Direction::back, backIter->second);
+		}
 	}
-	
-	//up wall
-	if(walls.up && upIter!=worldChunks.end())
-	{
-		walls.up = false;
-		currChunk.update_wall(Direction::up, upIter->second);
-	}
-	
-	//down wall
-	if(walls.down && downIter!=worldChunks.end())
-	{
-		walls.down = false;
-		currChunk.update_wall(Direction::down, downIter->second);
-	}
-	
-	//forward wall
-	if(walls.forward && forwardIter!=worldChunks.end())
-	{
-		walls.forward = false;
-		currChunk.update_wall(Direction::forward, forwardIter->second);
-	}
-	
-	//back wall
-	if(walls.back && backIter!=worldChunks.end())
-	{
-		walls.back = false;
-		currChunk.update_wall(Direction::back, backIter->second);
-	}
-	
 	
 	if(!walls.walls_or())
 		_chunkUpdateWalls.erase(iter);
@@ -262,23 +258,24 @@ void WorldController::set_visibles()
 		auto currIter = worldChunks.find(chunk);
 		
 		bool currEmpty = currIter==worldChunks.end() || currIter->second.empty();
+		
+		
+		info.visible = false;
 			
 		if(currEmpty || Vec3d<int>::magnitude(diffPos) > _renderDist)
 		{
-			info.visible = false;
+			continue;
 		} else
 		{
 			Vec3d<float> checkPosF = Vec3dCVT<float>(chunk)*chunkSize;
 		
-			if(_mainCamera->cube_in_frustum({checkPosF.x, checkPosF.y, checkPosF.z}, chunkSize))
+			if(!_mainCamera->cube_in_frustum({checkPosF.x, checkPosF.y, checkPosF.z}, chunkSize))
 			{
-				info.visible = true;
-			} else
-			{
-				info.visible = false;
+				continue;
 			}
 		}
 		
+		info.visible = true;
 		
 		//todo occlusion culling
 	}
