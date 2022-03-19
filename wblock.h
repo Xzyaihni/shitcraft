@@ -5,25 +5,25 @@
 #include "inventory.h"
 
 
-struct WorldBlock
+struct world_block
 {
-	int blockType;	
-	WorldTypes::BlockInfo info = {}; 
+	int block_type;	
+	world_types::block_info info; 
 
 	void update();
-	Loot destroy();
+	loot destroy();
 	
-	WorldTypes::TextureFace texture() const;
+	world_types::texture_face texture() const;
 	bool transparent() const;
 };
 
-namespace WorldTypes
+namespace world_types
 {
-	struct BlockPlace
+	struct block_place
 	{
-		Vec3d<int> pos;
+		vec3d<int> pos;
 			
-		WorldBlock block;
+		world_block block;
 	};
 }
 

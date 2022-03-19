@@ -1,54 +1,56 @@
 #include "wblock.h"
 
-using namespace WorldTypes;
+using namespace world_types;
 
 
-void WorldBlock::update()
+void world_block::update()
 {
 }
 
-Loot WorldBlock::destroy()
+loot world_block::destroy()
 {
-	return Loot{};
+	block_type = block::air;
+
+	return loot{};
 }
 
-TextureFace WorldBlock::texture() const
+texture_face world_block::texture() const
 {
-	switch(blockType)
+	switch(block_type)
 	{
-		case Block::dirt:
-			return info.grassy ? TextureFace{{0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 1}, {0, 2}}
-			: TextureFace{{0, 2}, {0, 2}, {0, 2}, {0, 2}, {0, 2}, {0, 2}};
+		case block::dirt:
+			return info.grassy ? texture_face{{0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 1}, {0, 2}}
+			: texture_face{{0, 2}, {0, 2}, {0, 2}, {0, 2}, {0, 2}, {0, 2}};
 			
-		case Block::stone:
-			return TextureFace{{1, 0}, {1, 0}, {1, 0}, {1, 0}, {1, 0}, {1, 0}};
+		case block::stone:
+			return texture_face{{1, 0}, {1, 0}, {1, 0}, {1, 0}, {1, 0}, {1, 0}};
 			
-		case Block::sand:
-			return TextureFace{{2, 0}, {2, 0}, {2, 0}, {2, 0}, {2, 0}, {2, 0}};
+		case block::sand:
+			return texture_face{{2, 0}, {2, 0}, {2, 0}, {2, 0}, {2, 0}, {2, 0}};
 			
-		case Block::log:
-			return TextureFace{{3, 0}, {3, 0}, {3, 0}, {3, 0}, {3, 1}, {3, 1}};
+		case block::log:
+			return texture_face{{3, 0}, {3, 0}, {3, 0}, {3, 0}, {3, 1}, {3, 1}};
 			
-		case Block::leaf:
-			return TextureFace{{4, 0}, {4, 0}, {4, 0}, {4, 0}, {4, 0}, {4, 0}};
+		case block::leaf:
+			return texture_face{{4, 0}, {4, 0}, {4, 0}, {4, 0}, {4, 0}, {4, 0}};
 			
-		case Block::cactus:
-			return TextureFace{{5, 0}, {5, 0}, {5, 0}, {5, 0}, {5, 1}, {5, 1}};
+		case block::cactus:
+			return texture_face{{5, 0}, {5, 0}, {5, 0}, {5, 0}, {5, 1}, {5, 1}};
 			
-		case Block::lava:
-			return TextureFace{{6, 0}, {6, 0}, {6, 0}, {6, 0}, {6, 0}, {6, 0}};
+		case block::lava:
+			return texture_face{{6, 0}, {6, 0}, {6, 0}, {6, 0}, {6, 0}, {6, 0}};
 		
 		default:
-			return TextureFace{};
+			return texture_face{};
 	}
 }
 
-bool WorldBlock::transparent() const
+bool world_block::transparent() const
 {
-	switch(blockType)
+	switch(block_type)
 	{
-		case Block::leaf:
-		case Block::air:
+		case block::leaf:
+		case block::air:
 			return true;
 		
 		default:

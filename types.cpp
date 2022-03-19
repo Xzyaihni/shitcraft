@@ -2,53 +2,53 @@
 
 #include "types.h"
 
-Direction directionOpposite(Direction dir)
+ytype::direction direction_opposite(const ytype::direction direction)
 {
-	switch(dir)
+	switch(direction)
 	{
-		case Direction::left:
-		return Direction::right;
+		case ytype::direction::left:
+		return ytype::direction::right;
 		
-		case Direction::right:
-		return Direction::left;
+		case ytype::direction::right:
+		return ytype::direction::left;
 		
-		case Direction::up:
-		return Direction::down;
+		case ytype::direction::up:
+		return ytype::direction::down;
 		
-		case Direction::down:
-		return Direction::up;
+		case ytype::direction::down:
+		return ytype::direction::up;
 		
-		case Direction::forward:
-		return Direction::back;
+		case ytype::direction::forward:
+		return ytype::direction::back;
 		
-		case Direction::back:
-		return Direction::forward;
+		case ytype::direction::back:
+		return ytype::direction::forward;
 	
 		default:
-		return Direction::none;
+		return ytype::direction::none;
 	}
 }
 
-Vec3d<int> directionAdd(Vec3d<int> add_vec, Direction dir, int offset)
+vec3d<int> direction_add(const vec3d<int> add_vec, const ytype::direction direction, const int offset)
 {
-	switch(dir)
+	switch(direction)
 	{
-		case Direction::left:
+		case ytype::direction::left:
 		return {add_vec.x-offset, add_vec.y, add_vec.z};
 		
-		case Direction::right:
+		case ytype::direction::right:
 		return {add_vec.x+offset, add_vec.y, add_vec.z};
 		
-		case Direction::up:
+		case ytype::direction::up:
 		return {add_vec.x, add_vec.y+offset, add_vec.z};
 		
-		case Direction::down:
+		case ytype::direction::down:
 		return {add_vec.x, add_vec.y-offset, add_vec.z};
 		
-		case Direction::forward:
+		case ytype::direction::forward:
 		return {add_vec.x, add_vec.y, add_vec.z+offset};
 		
-		case Direction::back:
+		case ytype::direction::back:
 		return {add_vec.x, add_vec.y, add_vec.z-offset};
 	
 		default:

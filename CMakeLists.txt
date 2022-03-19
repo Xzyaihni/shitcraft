@@ -6,12 +6,13 @@ option(Y_DEBUG "build in debug mode" "OFF")
 option(Y_SANITIZE "build with address sanitizer" "OFF")
 
 set(YANDERELIBS "yanderegllib/glcyan.cpp"
+"yanderegllib/glcore.cpp"
 "yanderegllib/yanconv.cpp")
 
 
 set(SOURCE_FILES main.cpp
 character.cpp
-world.cpp
+chunk.cpp
 wgen.cpp
 wctl.cpp
 wblock.cpp
@@ -19,6 +20,7 @@ noise.cpp
 inventory.cpp
 physics.cpp
 types.cpp
+textures.cpp
 ${YANDERELIBS})
 
 if(${Y_DEBUG})

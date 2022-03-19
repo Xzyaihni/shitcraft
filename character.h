@@ -6,22 +6,22 @@
 
 #include "physics.h"
 
-class Character : public PhysicsObject
+class character : public physics_object
 {
 public:
-	using PhysicsObject::PhysicsObject;
+	using physics_object::physics_object;
 	
-	bool onGround = false;
-	bool midJump = false;
+	bool on_ground = false;
+	bool mid_jump = false;
 	bool sneaking = false;
 	
-	float headHeight = 1;
+	float head_height = 1;
 	
-	float moveSpeed = 0;
-	float jumpStrength = 1.5f;
+	float move_speed = 0;
+	float jump_strength = 1.5f;
 
 private:
-	PhysicsController* _physCtl;
+	physics_controller* _phys_ctl;
 };
 
 #endif

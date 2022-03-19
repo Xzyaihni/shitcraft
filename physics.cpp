@@ -4,76 +4,76 @@
 #include <cassert>
 
 #include "physics.h"
-#include "world.h"
+#include "chunk.h"
 
 
-using namespace WorldTypes;
+using namespace world_types;
 
-PhysicsObject::PhysicsObject()
+physics_object::physics_object()
 {
 }
 
-PhysicsObject::PhysicsObject(PhysicsController* physCtl) : _physCtl(physCtl)
+physics_object::physics_object(physics_controller* phys_ctl) : _phys_ctl(phys_ctl)
 {
 }
 
-void PhysicsObject::update(double timeDelta)
+void physics_object::update(double time_d)
 {
-	assert(_physCtl!=nullptr);
+	assert(_phys_ctl!=nullptr);
 
-	activeChunkPos = WorldChunk::active_chunk(position);
+	active_chunk_pos = world_chunk::active_chunk(position);
 
-	if(!isStatic)
+	if(!is_static)
 	{
 		if(!floating)
 		{
-			acceleration += _physCtl->gravity;
+			acceleration += _phys_ctl->gravity;
 		}
 
-		Vec3d<float> newPosition;
-		Vec3d<float> newVelocity;
+		vec3d<float> new_position;
+		vec3d<float> new_velocity;
 
-		float crossSectionArea = M_PI*(size*size/4);
+		float cross_section_area = M_PI*(size*size/4);
 		
-		Vec3d<float> airResistance = 0.5f*dragCoefficient*_physCtl->airDensity*crossSectionArea*(velocity*velocity);
-		airResistance.x = velocity.x>0 ? -airResistance.x : airResistance.x;
-		airResistance.y = velocity.y>0 ? -airResistance.y : airResistance.y;
-		airResistance.z = velocity.z>0 ? -airResistance.z : airResistance.z;
+		vec3d<float> air_resistance = 0.5f*drag_coefficient*_phys_ctl->air_density*cross_section_area*(velocity*velocity);
+		air_resistance.x = velocity.x>0 ? -air_resistance.x : air_resistance.x;
+		air_resistance.y = velocity.y>0 ? -air_resistance.y : air_resistance.y;
+		air_resistance.z = velocity.z>0 ? -air_resistance.z : air_resistance.z;
 		
-		Vec3d<float> netForceAccel = (force+airResistance)/mass;
+		vec3d<float> net_force_accel = (force+air_resistance)/mass;
 		
-		newVelocity = velocity + (acceleration+netForceAccel)*timeDelta;
-		newPosition = position + velocity*timeDelta;
+		new_velocity = velocity + (acceleration+net_force_accel)*time_d;
+		new_position = position + velocity*time_d;
 		
-		RaycastResult xRaycast = _physCtl->raycast(position, {newPosition.x, position.y, position.z});
-		RaycastResult yRaycast = _physCtl->raycast(position, {position.x, newPosition.y, position.z});
-		RaycastResult zRaycast = _physCtl->raycast(position, {position.x, position.y, newPosition.z});
+		raycast_result x_raycast = _phys_ctl->raycast(position, {new_position.x, position.y, position.z});
+		raycast_result y_raycast = _phys_ctl->raycast(position, {position.x, new_position.y, position.z});
+		raycast_result z_raycast = _phys_ctl->raycast(position, {position.x, position.y, new_position.z});
 		
-		if(xRaycast.direction!=Direction::none)
+		if(x_raycast.direction!=ytype::direction::none)
 		{
-			newPosition.x = position.x;
-			newVelocity.x = 0;
+			new_position.x = position.x;
+			new_velocity.x = 0;
 		}
 		
-		if(yRaycast.direction!=Direction::none)
+		if(y_raycast.direction!=ytype::direction::none)
 		{
-			newPosition.y = position.y;
-			newVelocity.y = 0;
+			new_position.y = position.y;
+			new_velocity.y = 0;
 		}
 
-		if(zRaycast.direction!=Direction::none)
+		if(z_raycast.direction!=ytype::direction::none)
 		{
-			newPosition.z = position.z;
-			newVelocity.z = 0;
+			new_position.z = position.z;
+			new_velocity.z = 0;
 		}
 		
 		
-		position = newPosition;
-		velocity = newVelocity;
+		position = new_position;
+		velocity = new_velocity;
 	}
 }
 
-Vec3d<float> PhysicsObject::apply_friction(Vec3d<float> velocity, float friction)
+vec3d<float> physics_object::apply_friction(vec3d<float> velocity, float friction)
 {
 	if(velocity.x>0)
 	{
@@ -103,204 +103,202 @@ Vec3d<float> PhysicsObject::apply_friction(Vec3d<float> velocity, float friction
 }
 
 
-PhysicsController::PhysicsController()
+physics_controller::physics_controller(std::map<vec3d<int>, full_chunk>& world_chunks)
+: _world_chunks(world_chunks)
 {
 }
 
-PhysicsController::PhysicsController(std::map<Vec3d<int>, WorldChunk>* worldChunks) : _worldChunks(worldChunks)
+void physics_controller::physics_update(double time_d)
 {
-}
-
-void PhysicsController::physics_update(double timeDelta)
-{
-	std::for_each(physObjs.begin(), physObjs.end(), [timeDelta](auto& obj){obj.get().update(timeDelta);});
+	std::for_each(phys_objs.begin(), phys_objs.end(), [time_d](auto& obj){obj.get().update(time_d);});
 }
 
 
-RaycastResult PhysicsController::raycast(Vec3d<float> startPos, Vec3d<float> endPos)
+raycast_result physics_controller::raycast(vec3d<float> start_pos, vec3d<float> end_pos)
 {
-	Vec3d<int> vecDifference = WorldChunk::closest_block(endPos) - WorldChunk::closest_block(startPos);
+	vec3d<int> vec_difference = world_chunk::closest_block(end_pos) - world_chunk::closest_block(start_pos);
 	
-	int length = std::abs(vecDifference.x)+std::abs(vecDifference.y)+std::abs(vecDifference.z);
+	int length = std::abs(vec_difference.x)+std::abs(vec_difference.y)+std::abs(vec_difference.z);
 	
 	if(length==0)
-		return RaycastResult{Direction::none, {0, 0, 0}, {0, 0, 0}};
+		return raycast_result{ytype::direction::none, {0, 0, 0}, {0, 0, 0}};
 	
-	return raycast(startPos, endPos-startPos, length);
+	return raycast(start_pos, end_pos-start_pos, length);
 }
 
-RaycastResult PhysicsController::raycast(Vec3d<float> startPos, Vec3d<float> direction, int length)
+raycast_result physics_controller::raycast(vec3d<float> start_pos, vec3d<float> direction, int length)
 {
-	RaycastResult rayResult;
+	raycast_result ray_result;
 	
-	Vec3d<int> currChunkPos = WorldChunk::active_chunk(startPos);
+	vec3d<int> c_chunk_pos = world_chunk::active_chunk(start_pos);
 	
-	Vec3d<float> startBlockPos = Vec3d<float>{static_cast<float>(std::fmod(startPos.x, chunkSize)), static_cast<float>(std::fmod(startPos.y, chunkSize)), static_cast<float>(std::fmod(startPos.z, chunkSize))};
-	startBlockPos.x = startPos.x<0 ? chunkSize+startBlockPos.x : startBlockPos.x;
-	startBlockPos.y = startPos.y<0 ? chunkSize+startBlockPos.y : startBlockPos.y;
-	startBlockPos.z = startPos.z<0 ? chunkSize+startBlockPos.z : startBlockPos.z;
+	vec3d<float> start_block_pos = vec3d<float>{static_cast<float>(std::fmod(start_pos.x, chunk_size)), static_cast<float>(std::fmod(start_pos.y, chunk_size)), static_cast<float>(std::fmod(start_pos.z, chunk_size))};
+	start_block_pos.x = start_pos.x<0 ? chunk_size+start_block_pos.x : start_block_pos.x;
+	start_block_pos.y = start_pos.y<0 ? chunk_size+start_block_pos.y : start_block_pos.y;
+	start_block_pos.z = start_pos.z<0 ? chunk_size+start_block_pos.z : start_block_pos.z;
 	
-	direction /= Vec3d<float>::magnitude(direction); //normalize it
-	Vec3d<float> directionAbs{std::abs(direction.x), std::abs(direction.y), std::abs(direction.z)};
+	direction /= vec3d<float>::magnitude(direction); //normalize it
+	vec3d<float> direction_abs{std::abs(direction.x), std::abs(direction.y), std::abs(direction.z)};
 	
-	Vec3d<int> currCheckPos = WorldChunk::closest_block(startBlockPos);
-	Vec3d<bool> moveSide{false, false, false};
+	vec3d<int> c_check_pos = world_chunk::closest_block(start_block_pos);
+	vec3d<bool> move_side{false, false, false};
 	
 	
 	float temp;
 	
-	Vec3d<float> fractionalPos{std::abs(std::modf(startPos.x, &temp)), std::abs(std::modf(startPos.y, &temp)), std::abs(std::modf(startPos.z, &temp))};
+	vec3d<float> fractional_pos{std::abs(std::modf(start_pos.x, &temp)), std::abs(std::modf(start_pos.y, &temp)), std::abs(std::modf(start_pos.z, &temp))};
 	
-	Vec3d<float> positionChange;
-	if(startPos.x<0)
+	vec3d<float> position_change;
+	if(start_pos.x<0)
 	{
-		positionChange.x = direction.x<0 ? fractionalPos.x : 1-fractionalPos.x;
+		position_change.x = direction.x<0 ? fractional_pos.x : 1-fractional_pos.x;
 	} else
 	{
-		positionChange.x = direction.x<0 ? 1-fractionalPos.x : fractionalPos.x;
+		position_change.x = direction.x<0 ? 1-fractional_pos.x : fractional_pos.x;
 	}
 	
-	if(startPos.y<0)
+	if(start_pos.y<0)
 	{
-		positionChange.y = direction.y<0 ? fractionalPos.y : 1-fractionalPos.y;
+		position_change.y = direction.y<0 ? fractional_pos.y : 1-fractional_pos.y;
 	} else
 	{
-		positionChange.y = direction.y<0 ? 1-fractionalPos.y : fractionalPos.y;
+		position_change.y = direction.y<0 ? 1-fractional_pos.y : fractional_pos.y;
 	}
 	
-	if(startPos.z<0)
+	if(start_pos.z<0)
 	{
-		positionChange.z = direction.z<0 ? fractionalPos.z : 1-fractionalPos.z;
+		position_change.z = direction.z<0 ? fractional_pos.z : 1-fractional_pos.z;
 	} else
 	{
-		positionChange.z = direction.z<0 ? 1-fractionalPos.z : fractionalPos.z;
+		position_change.z = direction.z<0 ? 1-fractional_pos.z : fractional_pos.z;
 	}
 	
 	while(true)
 	{
-		auto currIter = _worldChunks->find(currChunkPos);
-		if(currIter==_worldChunks->end())
-			return RaycastResult{Direction::none, {0, 0, 0}, {0, 0, 0}};
+		const auto c_iter = _world_chunks.find(c_chunk_pos);
+		if(c_iter==_world_chunks.end())
+			return raycast_result{ytype::direction::none, {0, 0, 0}, {0, 0, 0}};
 	
+		const world_chunk& c_chunk = c_iter->second.chunk;
 		while(true)
 		{
-			if(currIter->second.block(currCheckPos).blockType!=Block::air)
-				return RaycastResult{(moveSide.x?(direction.x<0? Direction::left : Direction::right):(moveSide.y?(direction.y<0? Direction::down : Direction::up):(direction.z<0? Direction::back : Direction::forward))), currChunkPos, currCheckPos};
+			if(c_chunk.block(c_check_pos).block_type!=block::air)
+				return raycast_result{(move_side.x?(direction.x<0? ytype::direction::left : ytype::direction::right):(move_side.y?(direction.y<0? ytype::direction::down : ytype::direction::up):(direction.z<0? ytype::direction::back : ytype::direction::forward))), c_chunk_pos, c_check_pos};
 			
 			if(length==0)
-				return RaycastResult{Direction::none, {0, 0, 0}, {0, 0, 0}};
+				return raycast_result{ytype::direction::none, {0, 0, 0}, {0, 0, 0}};
 			
-			Vec3d<float> wallDist;
+			vec3d<float> wall_dist;
 			
-			wallDist.x = direction.x==0 ? INFINITY : (1-positionChange.x)/directionAbs.x;
-			wallDist.y = direction.y==0 ? INFINITY : (1-positionChange.y)/directionAbs.y;
-			wallDist.z = direction.z==0 ? INFINITY : (1-positionChange.z)/directionAbs.z;
+			wall_dist.x = direction.x==0 ? INFINITY : (1-position_change.x)/direction_abs.x;
+			wall_dist.y = direction.y==0 ? INFINITY : (1-position_change.y)/direction_abs.y;
+			wall_dist.z = direction.z==0 ? INFINITY : (1-position_change.z)/direction_abs.z;
 			
 						
 			--length;
-			if(wallDist.x <= wallDist.y && wallDist.x <= wallDist.z)
+			if(wall_dist.x <= wall_dist.y && wall_dist.x <= wall_dist.z)
 			{
 				//x wall is closest
-				positionChange.x = 0;
+				position_change.x = 0;
 				
-				positionChange.y += std::abs(wallDist.x*direction.y);
-				positionChange.y = positionChange.y>1 ? 1 : positionChange.y;
+				position_change.y += std::abs(wall_dist.x*direction.y);
+				position_change.y = position_change.y>1 ? 1 : position_change.y;
 				
-				positionChange.z += std::abs(wallDist.x*direction.z);
-				positionChange.z = positionChange.z>1 ? 1 : positionChange.z;
+				position_change.z += std::abs(wall_dist.x*direction.z);
+				position_change.z = position_change.z>1 ? 1 : position_change.z;
 				
-				moveSide = {true, false, false};
+				move_side = {true, false, false};
 				if(direction.x<0)
 				{
-					if(currCheckPos.x==0)
+					if(c_check_pos.x==0)
 					{
-						currCheckPos.x = chunkSize-1;
-						--currChunkPos.x;
+						c_check_pos.x = chunk_size-1;
+						--c_chunk_pos.x;
 						break;
 					} else
 					{
-						--currCheckPos.x;
+						--c_check_pos.x;
 					}
 				} else 
 				{
-					if(currCheckPos.x==chunkSize-1)
+					if(c_check_pos.x==chunk_size-1)
 					{
-						currCheckPos.x = 0;
-						++currChunkPos.x;
+						c_check_pos.x = 0;
+						++c_chunk_pos.x;
 						break;
 					} else
 					{
-						++currCheckPos.x;
+						++c_check_pos.x;
 					}
 				}
-			} else if(wallDist.y <= wallDist.x && wallDist.y <= wallDist.z)
+			} else if(wall_dist.y <= wall_dist.x && wall_dist.y <= wall_dist.z)
 			{
 				//y wall is closest
-				positionChange.x += std::abs(wallDist.y*direction.x);
-				positionChange.x = positionChange.x>1 ? 1 : positionChange.x;
+				position_change.x += std::abs(wall_dist.y*direction.x);
+				position_change.x = position_change.x>1 ? 1 : position_change.x;
 				
-				positionChange.y = 0;
+				position_change.y = 0;
 				
-				positionChange.z += std::abs(wallDist.y*direction.z);
-				positionChange.z = positionChange.z>1 ? 1 : positionChange.z;
+				position_change.z += std::abs(wall_dist.y*direction.z);
+				position_change.z = position_change.z>1 ? 1 : position_change.z;
 				
-				moveSide = {false, true, false};
+				move_side = {false, true, false};
 				if(direction.y<0)
 				{
-					if(currCheckPos.y==0)
+					if(c_check_pos.y==0)
 					{
-						currCheckPos.y = chunkSize-1;
-						--currChunkPos.y;
+						c_check_pos.y = chunk_size-1;
+						--c_chunk_pos.y;
 						break;
 					} else
 					{
-						--currCheckPos.y;
+						--c_check_pos.y;
 					}
 				} else 
 				{
-					if(currCheckPos.y==chunkSize-1)
+					if(c_check_pos.y==chunk_size-1)
 					{
-						currCheckPos.y = 0;
-						++currChunkPos.y;
+						c_check_pos.y = 0;
+						++c_chunk_pos.y;
 						break;
 					} else
 					{
-						++currCheckPos.y;
+						++c_check_pos.y;
 					}
 				}
 			} else
 			{
 				//z wall is closest
-				positionChange.x += std::abs(wallDist.z*direction.x);
-				positionChange.x = positionChange.x>1 ? 1 : positionChange.x;
+				position_change.x += std::abs(wall_dist.z*direction.x);
+				position_change.x = position_change.x>1 ? 1 : position_change.x;
 				
-				positionChange.y += std::abs(wallDist.z*direction.y);
-				positionChange.y = positionChange.y>1 ? 1 : positionChange.y;
+				position_change.y += std::abs(wall_dist.z*direction.y);
+				position_change.y = position_change.y>1 ? 1 : position_change.y;
 				
-				positionChange.z = 0;
+				position_change.z = 0;
 				
-				moveSide = {false, false, true};
+				move_side = {false, false, true};
 				if(direction.z<0)
 				{
-					if(currCheckPos.z==0)
+					if(c_check_pos.z==0)
 					{
-						currCheckPos.z = chunkSize-1;
-						--currChunkPos.z;
+						c_check_pos.z = chunk_size-1;
+						--c_chunk_pos.z;
 						break;
 					} else
 					{
-						--currCheckPos.z;
+						--c_check_pos.z;
 					}
 				} else 
 				{
-					if(currCheckPos.z==chunkSize-1)
+					if(c_check_pos.z==chunk_size-1)
 					{
-						currCheckPos.z = 0;
-						++currChunkPos.z;
+						c_check_pos.z = 0;
+						++c_chunk_pos.z;
 						break;
 					} else
 					{
-						++currCheckPos.z;
+						++c_check_pos.z;
 					}
 				}
 			}
@@ -308,25 +306,25 @@ RaycastResult PhysicsController::raycast(Vec3d<float> startPos, Vec3d<float> dir
 	}
 }
 
-int PhysicsController::raycast_distance(Vec3d<float> rayStart, RaycastResult raycast)
+int physics_controller::raycast_distance(vec3d<float> ray_start, raycast_result raycast)
 {
-	Vec3d<float> chunkOffset = Vec3dCVT<float>((raycast.chunk-WorldChunk::active_chunk(rayStart))*chunkSize);
+	vec3d<float> chunk_offset = vec3d_cvt<float>((raycast.chunk-world_chunk::active_chunk(ray_start))*chunk_size);
 	
-	Vec3d<float> inChunkPos{
-	static_cast<float>(std::fmod(rayStart.x, chunkSize)),
-	static_cast<float>(std::fmod(rayStart.y, chunkSize)),
-	static_cast<float>(std::fmod(rayStart.z, chunkSize))};
+	vec3d<float> in_chunk_pos{
+	static_cast<float>(std::fmod(ray_start.x, chunk_size)),
+	static_cast<float>(std::fmod(ray_start.y, chunk_size)),
+	static_cast<float>(std::fmod(ray_start.z, chunk_size))};
 	
-	inChunkPos.x = inChunkPos.x<0 ? chunkSize+inChunkPos.x : inChunkPos.x;
-	inChunkPos.y = inChunkPos.y<0 ? chunkSize+inChunkPos.y : inChunkPos.y;
-	inChunkPos.z = inChunkPos.z<0 ? chunkSize+inChunkPos.z : inChunkPos.z;
+	in_chunk_pos.x = in_chunk_pos.x<0 ? chunk_size+in_chunk_pos.x : in_chunk_pos.x;
+	in_chunk_pos.y = in_chunk_pos.y<0 ? chunk_size+in_chunk_pos.y : in_chunk_pos.y;
+	in_chunk_pos.z = in_chunk_pos.z<0 ? chunk_size+in_chunk_pos.z : in_chunk_pos.z;
 	
-	chunkOffset = chunkOffset+Vec3dCVT<float>(raycast.block)-inChunkPos;
+	chunk_offset = chunk_offset+vec3d_cvt<float>(raycast.block)-in_chunk_pos;
 
-	return Vec3d<float>::magnitude(chunkOffset);
+	return vec3d<float>::magnitude(chunk_offset);
 }
 
-Vec3d<float> PhysicsController::calc_dir(float yaw, float pitch)
+vec3d<float> physics_controller::calc_dir(float yaw, float pitch)
 {
 	return {std::cos(yaw)*std::cos(pitch), std::sin(pitch), std::cos(pitch)*std::sin(yaw)};
 }

@@ -6,31 +6,30 @@
 #include <cmath>
 #include <memory>
 #include <thread>
+#include <tuple>
 #include <map>
 #include <mutex>
 #include <queue>
 #include <condition_variable>
 #include <future>
 
-#include <glcyan.h>
-#include <GLFW/glfw3.h>
-
-#include "world.h"
+#include "chunk.h"
 #include "character.h"
 #include "types.h"
 #include "physics.h"
 #include "wctl.h"
 
 
-using namespace WorldTypes;
+using namespace yanderegl;
+using namespace world_types;
 
-class GameController
+class game_controller
 {
 private:
-	enum YKey {forward = 0, back, right, left,  jump, crouch, LAST};
+	enum ykey {forward = 0, back, right, left, jump, crouch, LAST};
 
 public:
-	GameController();
+	game_controller();
 	void graphics_init();
 	
 	void draw_update();
@@ -50,397 +49,413 @@ public:
 	
 	void window_terminate();
 	
-	std::vector<int> controlKeys;
+	std::vector<int> control_keys;
 	
-	GLFWwindow* _mainWindow;
-	WorldController worldCtl;
+	GLFWwindow* main_window;
+	world_controller world_ctl;
 	
-	YanColor skyColor;
+	yan_color sky_color;
 	
-	int screenWidth;
-	int screenHeight;
-	float mouseSens;
+	int screen_width;
+	int screen_height;
+	float mouse_sens;
 	
 private:
 	void update_status_texts();
 
-	double _lastFrameTime;
-	double _timeDelta = 0;
+	double _last_frame_time;
+	double _time_delta = 0;
 	
-	float _secondCounter = 1;
+	float _second_counter = 1;
 	int _fps = 0;
-	int _displayFps = 0;
+	int _display_fps = 0;
 	
-	int _lastMouseX = 0;
-	int _lastMouseY = 0;
+	int _last_mouse_x = 0;
+	int _last_mouse_y = 0;
 
-	bool _mouseLocked = false;
+	bool _mouse_locked = false;
 	
 	float _yaw = 0;
 	float _pitch = 0;
 
-	int _lookDistance = 9;
+	int _look_distance = 9;
 
-	Direction _lookDirection = Direction::none;
-	Vec3d<int> _lookChunk;
-	Vec3d<int> _lookBlock;
+	ytype::direction _look_direction = ytype::direction::none;
+	vec3d<int> _look_chunk;
+	vec3d<int> _look_block;
 	
-	YandereObject _lookPlane;
-	
-
-	int _chunksAmount;
-	
-	unsigned _defaultShaderID = -1;
-	unsigned _gameObjectShaderID = -1;
-	unsigned _guiShaderID = -1;
-	
-	YandereShaderProgram* _shaderGameObjPtr = nullptr;
-	unsigned _shaderPlayerPosLoc = -1;
+	yandere_object _look_plane;
 	
 
-	Character _mainCharacter;
+	int _chunks_amount;
+	
+	yandere_shader_program _default_shader;
+	yandere_shader_program _game_object_shader;
+	yandere_shader_program _gui_shader;
+	
+	unsigned _shader_player_pos_id = -1;
+	
 
-	YandereInitializer _mainInit;
-	YandereCamera _mainCamera;
-	YandereCamera _guiCamera;
-	PhysicsController _mainPhysCtl;
+	character _main_character;
+
+	std::unique_ptr<yandere_controller> _yan_control;
+	std::unique_ptr<physics_controller> _main_phys_ctl;
 	
-	std::vector<YandereObject> _guiElements;
+	yandere_camera _main_camera;
+	yandere_camera _gui_camera;
 	
-	std::map<std::string, unsigned> _texturesMap;
-	std::map<std::string, unsigned> _shadersMap;
-	std::map<std::string, YandereText> _textsMap;
+	yandere_gui _main_gui;
 	
-	float _guiWidth;
-	float _guiHeight;
+	std::vector<yandere_object> _gui_elements;
+	
+	std::map<std::string, unsigned> _textures_map;
+	std::map<std::string, unsigned> _shaders_map;
+	std::map<std::string, yandere_text> _texts_map;
+	
+	float _gui_width;
+	float _gui_height;
 };
 
-std::unique_ptr<GameController> _mainWorld;
 
-GameController::GameController()
+game_controller main_world;
+
+
+game_controller::game_controller()
 {
-	controlKeys = std::vector(YKey::LAST, 0);
+	control_keys = std::vector(ykey::LAST, 0);
 
-	controlKeys[YKey::forward] = GLFW_KEY_W;
-	controlKeys[YKey::back] = GLFW_KEY_S;
-	controlKeys[YKey::right] = GLFW_KEY_D;
-	controlKeys[YKey::left] = GLFW_KEY_A;
-	controlKeys[YKey::jump] = GLFW_KEY_SPACE;
-	controlKeys[YKey::crouch] = GLFW_KEY_LEFT_CONTROL;
+	control_keys[ykey::forward] = GLFW_KEY_W;
+	control_keys[ykey::back] = GLFW_KEY_S;
+	control_keys[ykey::right] = GLFW_KEY_D;
+	control_keys[ykey::left] = GLFW_KEY_A;
+	control_keys[ykey::jump] = GLFW_KEY_SPACE;
+	control_keys[ykey::crouch] = GLFW_KEY_LEFT_CONTROL;
 	
 	
-	skyColor = {0.05f, 0.4f, 0.7f};
+	sky_color = {0.05f, 0.4f, 0.7f};
 
-	screenWidth = 640;
-	screenHeight = 640;
-	mouseSens = 250.0f;
-
-	_mainInit = YandereInitializer();
-	_shadersMap = _mainInit.load_shaders_from("./shaders");
-	_texturesMap = _mainInit.load_textures_from("./textures");
+	screen_width = 640;
+	screen_height = 640;
+	mouse_sens = 250.0f;
 	
-	_mainInit.load_font("./fonts/FreeSans.ttf");
+	_main_camera = yandere_camera({0, 0, 0}, {0, 0, 1});
+	resize_func(screen_width, screen_height);
 	
-	_mainCamera = YandereCamera({0, 0, 0}, {0, 0, 1});
-	resize_func(screenWidth, screenHeight);
+	_gui_camera = yandere_camera({0, 0, 1}, {0, 0, 0});
 	
-	_guiCamera = YandereCamera({0, 0, 1}, {0, 0, 0});
-	
-	_guiWidth = 1000;
-	_guiHeight = 1000;
-	_guiCamera.create_projection({
-	-_guiWidth,
-	_guiWidth,
-	-_guiHeight,
-	_guiHeight}, {0, 2});
-	
-	
-	worldCtl = WorldController(&_mainInit, &_mainCharacter, &_mainCamera);
-	
-	_mainPhysCtl = PhysicsController(&worldCtl.worldChunks);
-	
-	_mainCharacter = Character(&_mainPhysCtl);
-	_mainCharacter.moveSpeed = 10;
-	_mainCharacter.mass = 50;
-	_mainCharacter.floating = true;
-	_mainCharacter.position = {500, 30, 1200};
-	_mainPhysCtl.physObjs.push_back(_mainCharacter);
-	
-	
-	mousepos_update(_lastMouseX, _lastMouseY);
+	_gui_width = 1000;
+	_gui_height = 1000;
+	_gui_camera.create_projection({
+	-_gui_width,
+	_gui_width,
+	-_gui_height,
+	_gui_height}, {0, 2});
 }
 
-void GameController::graphics_init()
+void game_controller::graphics_init()
 {
 	if(!glfwInit())
 	{
-		std::cout << "glfw init failed!" << std::endl;
-		return;
+		throw std::runtime_error("glfw init failed!");
 	}
 	
-	_mainWindow = glfwCreateWindow(screenWidth, screenHeight, "shitcraft", NULL, NULL);
-	if(!_mainWindow)
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	
+	main_window = glfwCreateWindow(screen_width, screen_height, "shitcraft", NULL, NULL);
+	if(!main_window)
 	{
-		std::cout << "main window creation failed!" << std::endl;
-		return;
+		throw std::runtime_error("main window creation failed!");
 	}
 	
-	glfwMakeContextCurrent(_mainWindow);
+	glfwMakeContextCurrent(main_window);
+	glViewport(0, 0, screen_width, screen_height);
+
+	_yan_control = std::make_unique<yandere_controller>(true, true, true);
+
+	yandere_resources& yan_resources = _yan_control->resources();
+	_shaders_map = yan_resources.load_shaders_from("./shaders");
+	_textures_map = yan_resources.load_textures_from("./textures");
 	
-	glViewport(0, 0, screenWidth, screenHeight);
-	_mainInit.do_glew_init();
-	
-	
-	unsigned currSeed = time(NULL);
-	worldCtl.create_world(_texturesMap["block_textures"], currSeed);	
-	std::cout << "world seed: " << currSeed << std::endl;
-	
-	
-	_defaultShaderID = _mainInit.create_shader_program({_shadersMap["defaultflat.fragment"], _shadersMap["defaultflat.vertex"]});
-	_gameObjectShaderID = _mainInit.create_shader_program({_shadersMap["gameobject.fragment"], _shadersMap["gameobject.vertex"]});
-	_guiShaderID = _mainInit.create_shader_program({_shadersMap["text.fragment"], _shadersMap["defaultflat.vertex"]});
-	
-	_shaderGameObjPtr = _mainInit.shader_program_ptr(_gameObjectShaderID);
-	
-	_shaderPlayerPosLoc = _shaderGameObjPtr->add_vec3("playerPos");
-	_shaderGameObjPtr->set_prop(_shaderGameObjPtr->add_vec3("fogColor"), YVec3{skyColor.r, skyColor.g, skyColor.b});
-	_shaderGameObjPtr->set_prop(_shaderGameObjPtr->add_num("renderDistance"), worldCtl.render_dist());
+	_yan_control->load_font("./fonts/FreeSans.ttf");
 	
 	
-	const float textPadding = 10.0f;
-	const float textDistance = 15.0f;
+	_default_shader = _yan_control->create_shader_program({_shaders_map["defaultflat.fragment"], _shaders_map["defaultflat.vertex"]});
+	_game_object_shader = _yan_control->create_shader_program({_shaders_map["gameobject.fragment"], _shaders_map["gameobject.vertex"]});
+	_gui_shader = _yan_control->create_shader_program({_shaders_map["text.fragment"], _shaders_map["defaultflat.vertex"]});
 	
-	_textsMap["xPos"] = _mainInit.create_text("undefined", "FreeSans", 30, 0, 0);
-	float xPosHeight = _textsMap["xPos"].text_height();
 	
-	float textXPos = -_guiWidth+textPadding;
+	world_ctl = world_controller(_yan_control.get(), main_window, &_main_character, &_main_camera, _game_object_shader);
 	
-	_textsMap["xPos"].set_position(textXPos, _guiHeight-xPosHeight-textPadding);
-	_textsMap["yPos"] = _mainInit.create_text("undefined", "FreeSans", 30, textXPos, _textsMap["xPos"].getPosition()[1]-xPosHeight-textDistance);
-	_textsMap["zPos"] = _mainInit.create_text("undefined", "FreeSans", 30, textXPos, _textsMap["yPos"].getPosition()[1]-xPosHeight-textDistance);
+	_shader_player_pos_id = _game_object_shader.add_vec3("player_pos");
+	_game_object_shader.set_prop(_game_object_shader.add_vec3("fog_color"), yvec3{sky_color.r, sky_color.g, sky_color.b});
+	_game_object_shader.set_prop(_game_object_shader.add_num("render_distance"), world_ctl.render_dist());
 	
-	_textsMap["fps"] = _mainInit.create_text("undefined", "FreeSans", 30, textXPos, _textsMap["zPos"].getPosition()[1]-xPosHeight*2-textDistance);
+	unsigned c_seed = time(NULL);
+	world_ctl.create_world(_textures_map["block_textures"], c_seed);	
+	std::cout << "world seed: " << c_seed << std::endl;
+	
+	_main_phys_ctl = std::make_unique<physics_controller>(world_ctl.world_chunks);
+	
+	_main_character = character(_main_phys_ctl.get());
+	_main_character.move_speed = 10;
+	_main_character.mass = 50;
+	_main_character.floating = true;
+	_main_character.position = {500, 30, 1200};
+	_main_phys_ctl->phys_objs.push_back(_main_character);
+	
+	
+	mousepos_update(_last_mouse_x, _last_mouse_y);
+	
+	
+	_main_gui = yandere_gui();
+	const float text_padding = 10.0f;
+	const float text_distance = 15.0f;
+	
+	_texts_map.emplace(std::piecewise_construct, 
+	std::forward_as_tuple("x_pos"), 
+	std::forward_as_tuple(_gui_shader, _yan_control->font("FreeSans"), "undefined", 30, 0, 0));
+	
+	float x_pos_height = _texts_map.at("x_pos").text_height();
+	
+	float text_pos_x = -_gui_width+text_padding;
+	
+	_texts_map.at("x_pos").set_position(text_pos_x, _gui_height-x_pos_height-text_padding);
+	_texts_map.emplace(std::piecewise_construct,
+	std::forward_as_tuple("y_pos"),
+	std::forward_as_tuple(_gui_shader, _yan_control->font("FreeSans"), "undefined",
+	30, text_pos_x, _texts_map.at("x_pos").position()[1]-x_pos_height-text_distance));
+	
+	_texts_map.emplace(std::piecewise_construct,
+	std::forward_as_tuple("z_pos"),
+	std::forward_as_tuple(_gui_shader, _yan_control->font("FreeSans"), "undefined",
+	30, text_pos_x, _texts_map.at("y_pos").position()[1]-x_pos_height-text_distance));
+	
+	_texts_map.emplace(std::piecewise_construct,
+	std::forward_as_tuple("fps"),
+	std::forward_as_tuple(_gui_shader, _yan_control->font("FreeSans"), "undefined",
+	30, text_pos_x, _texts_map.at("z_pos").position()[1]-x_pos_height*2-text_distance));
 	
 	update_status_texts();
 	
-	_guiElements.push_back(YandereObject(&_mainInit, DefaultModel::square, _texturesMap["crosshair"], {{0, 0, 0}, {25, 25, 1}}));
+	_gui_elements.push_back(yandere_object(_gui_shader,
+	yan_resources.create_model(default_model::square), yan_resources.create_texture(_textures_map["crosshair"]),
+	{{0, 0, 0}, {25, 25, 1}}));
 	
-	_mainCharacter.activeChunkPos = {0, 0, 0};
+	_main_character.active_chunk_pos = {0, 0, 0};
 	
-	_lookPlane = YandereObject(&_mainInit, DefaultModel::square, DefaultTexture::solid, {{}, {0.5f, 0.5f, 0.5f}}, {1, 1, 1, 0.2f});
+	_look_plane = yandere_object(_game_object_shader,
+	yan_resources.create_model(default_model::square), yan_resources.create_texture(default_texture::solid),
+	{{}, {0.5f, 0.5f, 0.5f}}, {1, 1, 1, 0.2f});
 	
 	
-	_lastFrameTime = glfwGetTime();
+	_last_frame_time = glfwGetTime();
 }
 
-void GameController::window_terminate()
+void game_controller::window_terminate()
 {
-	glfwDestroyWindow(_mainWindow);
+	glfwDestroyWindow(main_window);
 	
-	worldCtl.wait_threads();
+	world_ctl.wait_threads();
 }
 
-void GameController::update_status_texts()
+void game_controller::update_status_texts()
 {
-	_textsMap["xPos"].change_text("x: "+std::to_string(_mainCharacter.position.x));
-	_textsMap["yPos"].change_text("y: "+std::to_string(_mainCharacter.position.y));
-	_textsMap["zPos"].change_text("z: "+std::to_string(_mainCharacter.position.z));
+	_texts_map.at("x_pos").set_text("x: "+std::to_string(_main_character.position.x));
+	_texts_map.at("y_pos").set_text("y: "+std::to_string(_main_character.position.y));
+	_texts_map.at("z_pos").set_text("z: "+std::to_string(_main_character.position.z));
 	
-	_textsMap["fps"].change_text("fps: "+std::to_string(_displayFps));
+	_texts_map.at("fps").set_text("fps: "+std::to_string(_display_fps));
 }
 
-void GameController::draw_update()
+void game_controller::draw_update()
 {
-	_mainInit.set_shader_program(_gameObjectShaderID);
-
-	glClearColor(skyColor.r, skyColor.g, skyColor.b, 1.0f);
+	glClearColor(sky_color.r, sky_color.g, sky_color.b, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
 	
-	_mainInit.set_draw_camera(&_mainCamera);
 	
-	worldCtl.draw_update();
+	_yan_control->set_draw_camera(&_main_camera);
 	
-	if(_lookDirection!=Direction::none)
+	world_ctl.draw_update();
+	
+	if(_look_direction!=ytype::direction::none)
 	{
 		glClear(GL_DEPTH_BUFFER_BIT);
 	
-		_lookPlane.draw_update();
+		_look_plane.draw_update();
 	}
 	
 	glClear(GL_DEPTH_BUFFER_BIT);
-	_mainInit.set_shader_program(_guiShaderID);
-	_mainInit.set_draw_camera(&_guiCamera);
+	_yan_control->set_draw_camera(&_gui_camera);
 	
-	for(auto& [name, text] : _textsMap)
+	for(auto& [name, text] : _texts_map)
 	{
 		text.draw_update();
 	}
 	
-	for(auto& element : _guiElements)
+	for(auto& element : _gui_elements)
 	{
 		element.draw_update();
 	}
 	
-	glfwSwapBuffers(_mainWindow);
+	glfwSwapBuffers(main_window);
 }
 
-void GameController::update_func()
+void game_controller::update_func()
 {
-	_timeDelta = (glfwGetTime()-_lastFrameTime);
-	_lastFrameTime = glfwGetTime();
+	_time_delta = (glfwGetTime()-_last_frame_time);
+	_last_frame_time = glfwGetTime();
 	
-	_secondCounter -= _timeDelta;
+	_second_counter -= _time_delta;
 	++_fps;
 	
-	if(_secondCounter<=0)
+	if(_second_counter<=0)
 	{
-		_displayFps = _fps;
-		_secondCounter = 1;
+		_display_fps = _fps;
+		_second_counter = 1;
 		_fps = 0;
 	}
 
-	Vec3d<float> currAccel = {0, 0, 0};
-	if(glfwGetKey(_mainWindow, controlKeys[YKey::forward]))
+	vec3d<float> c_accel = {0, 0, 0};
+	if(glfwGetKey(main_window, control_keys[ykey::forward]))
 	{
-		currAccel.z += std::sin(_yaw) * _mainCharacter.moveSpeed;
-		currAccel.x += std::cos(_yaw) * _mainCharacter.moveSpeed;
+		c_accel.z += std::sin(_yaw) * _main_character.move_speed;
+		c_accel.x += std::cos(_yaw) * _main_character.move_speed;
 	}
-	if(glfwGetKey(_mainWindow, controlKeys[YKey::back]))
+	if(glfwGetKey(main_window, control_keys[ykey::back]))
 	{
-		currAccel.z -= std::sin(_yaw) * _mainCharacter.moveSpeed;
-		currAccel.x -= std::cos(_yaw) * _mainCharacter.moveSpeed;
+		c_accel.z -= std::sin(_yaw) * _main_character.move_speed;
+		c_accel.x -= std::cos(_yaw) * _main_character.move_speed;
 	}
-	if(glfwGetKey(_mainWindow, controlKeys[YKey::right]))
+	if(glfwGetKey(main_window, control_keys[ykey::right]))
 	{
-		currAccel.z += std::cos(_yaw) * _mainCharacter.moveSpeed;
-		currAccel.x += -std::sin(_yaw) * _mainCharacter.moveSpeed;
+		c_accel.z += std::cos(_yaw) * _main_character.move_speed;
+		c_accel.x += -std::sin(_yaw) * _main_character.move_speed;
 	}
-	if(glfwGetKey(_mainWindow, controlKeys[YKey::left]))
+	if(glfwGetKey(main_window, control_keys[ykey::left]))
 	{
-		currAccel.z -= std::cos(_yaw) * _mainCharacter.moveSpeed;
-		currAccel.x -= -std::sin(_yaw) * _mainCharacter.moveSpeed;
+		c_accel.z -= std::cos(_yaw) * _main_character.move_speed;
+		c_accel.x -= -std::sin(_yaw) * _main_character.move_speed;
 	}
 	
-	if(glfwGetKey(_mainWindow, controlKeys[YKey::jump]))
+	if(glfwGetKey(main_window, control_keys[ykey::jump]))
 	{
-		if(_mainCharacter.onGround && !_mainCharacter.floating)
+		if(_main_character.on_ground && !_main_character.floating)
 		{
-			_mainCharacter.midJump = true;
-			currAccel.y += _mainCharacter.jumpStrength;
+			_main_character.mid_jump = true;
+			c_accel.y += _main_character.jump_strength;
 			
-			_mainCharacter.onGround = false;
-		} else if(_mainCharacter.floating)
+			_main_character.on_ground = false;
+		} else if(_main_character.floating)
 		{
-			currAccel.y += _mainCharacter.moveSpeed/2;
+			c_accel.y += _main_character.move_speed/2;
 		}
 	}
 	
-	if(glfwGetKey(_mainWindow, controlKeys[YKey::crouch]))
+	if(glfwGetKey(main_window, control_keys[ykey::crouch]))
 	{
-		if(!_mainCharacter.floating)
+		if(!_main_character.floating)
 		{
-			_mainCharacter.sneaking = true;
+			_main_character.sneaking = true;
 		} else
 		{
-			currAccel.y -= _mainCharacter.moveSpeed/2;
+			c_accel.y -= _main_character.move_speed/2;
 		}
 	} else
 	{
-		_mainCharacter.sneaking = false;
+		_main_character.sneaking = false;
 	}
 	
 	//the magical force controlling the character
-	_mainCharacter.velocity = currAccel;
+	_main_character.velocity = c_accel;
 	
 	
-	_mainPhysCtl.physics_update(_timeDelta);
+	_main_phys_ctl->physics_update(_time_delta);
 	
-	RaycastResult currRaycast = _mainPhysCtl.raycast(_mainCharacter.position, _mainCharacter.direction, _lookDistance*3);
-	if(currRaycast.direction!=Direction::none && _mainPhysCtl.raycast_distance(_mainCharacter.position, currRaycast)<_lookDistance)
+	raycast_result c_raycast = _main_phys_ctl->raycast(_main_character.position, _main_character.direction, _look_distance*3);
+	if(c_raycast.direction!=ytype::direction::none && _main_phys_ctl->raycast_distance(_main_character.position, c_raycast)<_look_distance)
 	{
-		_lookDirection = currRaycast.direction;
-		_lookChunk = currRaycast.chunk;
-		_lookBlock = currRaycast.block;
+		_look_direction = c_raycast.direction;
+		_look_chunk = c_raycast.chunk;
+		_look_block = c_raycast.block;
 		
-		YanPosition lookPos = {static_cast<float>(_lookChunk.x)*chunkSize+_lookBlock.x+0.5f, 
-				static_cast<float>(_lookChunk.y)*chunkSize+_lookBlock.y+0.5f, 
-				static_cast<float>(_lookChunk.z)*chunkSize+_lookBlock.z+0.5f};
+		yan_position look_pos = {static_cast<float>(_look_chunk.x)*chunk_size+_look_block.x+0.5f, 
+				static_cast<float>(_look_chunk.y)*chunk_size+_look_block.y+0.5f, 
+				static_cast<float>(_look_chunk.z)*chunk_size+_look_block.z+0.5f};
 				
-		switch(_lookDirection)
+		switch(_look_direction)
 		{
-			case Direction::right:
-				lookPos = {lookPos.x-0.5f, lookPos.y, lookPos.z};
+			case ytype::direction::right:
+				look_pos = {look_pos.x-0.5f, look_pos.y, look_pos.z};
 			
-				_lookPlane.set_rotation_axis(YanPosition{0, 1, 0});
-				_lookPlane.set_rotation(-M_PI/2);
+				_look_plane.set_rotation_axis(yan_position{0, 1, 0});
+				_look_plane.set_rotation(-M_PI/2);
 			break;
 		
-			case Direction::left:
-				lookPos = {lookPos.x+0.5f, lookPos.y, lookPos.z};
+			case ytype::direction::left:
+				look_pos = {look_pos.x+0.5f, look_pos.y, look_pos.z};
 			
-				_lookPlane.set_rotation_axis(YanPosition{0, 1, 0});
-				_lookPlane.set_rotation(M_PI/2);
+				_look_plane.set_rotation_axis(yan_position{0, 1, 0});
+				_look_plane.set_rotation(M_PI/2);
 			break;
 			
-			case Direction::up:
-				lookPos = {lookPos.x, lookPos.y-0.5f, lookPos.z};
+			case ytype::direction::up:
+				look_pos = {look_pos.x, look_pos.y-0.5f, look_pos.z};
 			
-				_lookPlane.set_rotation_axis(YanPosition{1, 0, 0});
-				_lookPlane.set_rotation(M_PI/2);
+				_look_plane.set_rotation_axis(yan_position{1, 0, 0});
+				_look_plane.set_rotation(M_PI/2);
 			break;
 			
-			case Direction::down:
-				lookPos = {lookPos.x, lookPos.y+0.5f, lookPos.z};
+			case ytype::direction::down:
+				look_pos = {look_pos.x, look_pos.y+0.5f, look_pos.z};
 			
-				_lookPlane.set_rotation_axis(YanPosition{1, 0, 0});
-				_lookPlane.set_rotation(-M_PI/2);
+				_look_plane.set_rotation_axis(yan_position{1, 0, 0});
+				_look_plane.set_rotation(-M_PI/2);
 			break;
 			
-			case Direction::forward:
-				lookPos = {lookPos.x, lookPos.y, lookPos.z-0.5f};
+			case ytype::direction::forward:
+				look_pos = {look_pos.x, look_pos.y, look_pos.z-0.5f};
 			
-				_lookPlane.set_rotation_axis(YanPosition{0, 1, 0});
-				_lookPlane.set_rotation(M_PI);
+				_look_plane.set_rotation_axis(yan_position{0, 1, 0});
+				_look_plane.set_rotation(M_PI);
 			break;
 			
-			case Direction::back:
-				lookPos = {lookPos.x, lookPos.y, lookPos.z+0.5f};
+			case ytype::direction::back:
+				look_pos = {look_pos.x, look_pos.y, look_pos.z+0.5f};
 			
-				_lookPlane.set_rotation_axis(YanPosition{0, 1, 0});
-				_lookPlane.set_rotation(0);
+				_look_plane.set_rotation_axis(yan_position{0, 1, 0});
+				_look_plane.set_rotation(0);
 			break;
 			
 			default:
 			break;
 		}
 		
-		_lookPlane.set_position(lookPos);
+		_look_plane.set_position(look_pos);
 	} else
 	{
-		_lookDirection = Direction::none;
+		_look_direction = ytype::direction::none;
 	}
 	
-	_shaderGameObjPtr->set_prop(_shaderPlayerPosLoc, YVec3{_mainCharacter.position.x, _mainCharacter.position.y, _mainCharacter.position.z});
+	_game_object_shader.set_prop(_shader_player_pos_id, yvec3{_main_character.position.x, _main_character.position.y, _main_character.position.z});
 	
 	
 	update_status_texts();
 	
-	_mainCamera.set_position({_mainCharacter.position.x, _mainCharacter.position.y, _mainCharacter.position.z});
-	
-	worldCtl.set_visibles();
+	_main_camera.set_position({_main_character.position.x, _main_character.position.y, _main_character.position.z});
 }
 
 
-void GameController::slow_update()
+void game_controller::slow_update()
 {
-	worldCtl.full_update();
+	world_ctl.full_update();
 }
 
-void GameController::mousepos_update(int x, int y)
+void game_controller::mousepos_update(int x, int y)
 {
-	_yaw += (x-_lastMouseX)/mouseSens;
-	_pitch -= (y-_lastMouseY)/mouseSens;
+	_yaw += (x-_last_mouse_x)/mouse_sens;
+	_pitch -= (y-_last_mouse_y)/mouse_sens;
 	
 	if(_yaw>M_PI*2)
 	{
@@ -453,140 +468,137 @@ void GameController::mousepos_update(int x, int y)
 	//pitch is in radians in a circle
 	_pitch = std::clamp(_pitch, -1.56f, 1.56f);
 	
-	_mainCamera.set_rotation(_yaw, _pitch);
+	_main_camera.set_rotation(_yaw, _pitch);
 	
-	_mainCharacter.direction = PhysicsController::calc_dir(_yaw, _pitch);
+	_main_character.direction = physics_controller::calc_dir(_yaw, _pitch);
 	
-	if(_mouseLocked)
+	if(_mouse_locked)
 	{
-		glfwSetCursorPos(_mainWindow, 0, 0);
-		_lastMouseX = 0;
-		_lastMouseY = 0;
+		glfwSetCursorPos(main_window, 0, 0);
+		_last_mouse_x = 0;
+		_last_mouse_y = 0;
 	} else
 	{
-		_lastMouseX = x;
-		_lastMouseY = y;
+		_last_mouse_x = x;
+		_last_mouse_y = y;
 	}
 }
 
-void GameController::control_func(bool mouse, int key, int action, int mods, int scancode)
+void game_controller::control_func(bool mouse, int key, int action, int mods, int scancode)
 {
-	if(key==GLFW_KEY_ESCAPE && action==GLFW_PRESS)
+	if(!mouse && key==GLFW_KEY_ESCAPE && action==GLFW_PRESS)
 	{
-		_mouseLocked = !_mouseLocked;
-		if(_mouseLocked)
+		_mouse_locked = !_mouse_locked;
+		if(_mouse_locked)
 		{
-			glfwSetInputMode(_mainWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+			glfwSetInputMode(main_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 		} else
 		{
-			glfwSetInputMode(_mainWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+			glfwSetInputMode(main_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 			
-			double xPos, yPos;
-			glfwGetCursorPos(_mainWindow, &xPos, &yPos);
-			_lastMouseX = static_cast<int>(xPos);
-			_lastMouseY = static_cast<int>(yPos);
+			double x_pos, y_pos;
+			glfwGetCursorPos(main_window, &x_pos, &y_pos);
+			_last_mouse_x = static_cast<int>(x_pos);
+			_last_mouse_y = static_cast<int>(y_pos);
 		}
 	}
 	
 	if(mouse && key==GLFW_MOUSE_BUTTON_LEFT && action==GLFW_PRESS)
+	{	
+		if(_look_direction!=ytype::direction::none)
+			world_ctl.destroy_block(_look_chunk, _look_block);
+	}
+	
+	if(mouse && key==GLFW_MOUSE_BUTTON_RIGHT && action==GLFW_PRESS)
 	{
-		//destroy a block
-		auto iter = worldCtl.worldChunks.find(_lookChunk);
-		if(_lookDirection!=Direction::none && iter!=worldCtl.worldChunks.end())
-		{
-			WorldChunk& currChunk = iter->second;
-		
-			currChunk.block(_lookBlock).blockType = Block::air;
-			worldCtl.chunk_update_full(currChunk, _lookBlock);
-		}
+		world_ctl.place_block(_look_chunk, _look_block, world_block{block::stone}, _look_direction);
 	}
 }
 
 
-void GameController::keyboard_func(int key, int scancode, int action, int mods)
+void game_controller::keyboard_func(int key, int scancode, int action, int mods)
 {
 	control_func(false, key, action, mods, scancode);
 }
 
-void GameController::mouse_func(int button, int action, int mods)
+void game_controller::mouse_func(int button, int action, int mods)
 {
 	control_func(true, button, action, mods, 0);
 }
 
-void GameController::resize_func(int width, int height)
+void game_controller::resize_func(int width, int height)
 {
-	screenWidth = width;
-	screenHeight = height;
+	screen_width = width;
+	screen_height = height;
 	
-	_mainCamera.create_projection(45, width/static_cast<float>(height), {0.001f, 500});
+	_main_camera.create_projection(45, width/static_cast<float>(height), {0.001f, 500});
 	
 	glViewport(0, 0, width, height);
 }
 
 void update_slow()
 {
-	_mainWorld->slow_update();
+	main_world.slow_update();
 }
 
 void mouse_callback(GLFWwindow* window, double x, double y)
 {
-	_mainWorld->mousepos_update(static_cast<int>(x), static_cast<int>(y));
+	main_world.mousepos_update(static_cast<int>(x), static_cast<int>(y));
 }
 
 void keyboard_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-	_mainWorld->keyboard_func(key, scancode, action, mods);
+	main_world.keyboard_func(key, scancode, action, mods);
 }
 
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
-	_mainWorld->mouse_func(button, action, mods);
+	main_world.mouse_func(button, action, mods);
 }
 
 void framebuffer_resize_callback(GLFWwindow* window, int width, int height)
 {
-	_mainWorld->resize_func(width, height);
+	main_world.resize_func(width, height);
 }
 
 int main(int argc, char* argv[])
 {	
-	_mainWorld = std::make_unique<GameController>();
-	_mainWorld->graphics_init();
+	main_world.graphics_init();
 	
-	glfwSetInputMode(_mainWorld->_mainWindow, GLFW_STICKY_KEYS, GLFW_TRUE);
+	glfwSetInputMode(main_world.main_window, GLFW_STICKY_KEYS, GLFW_TRUE);
 	
 	if(glfwRawMouseMotionSupported())
 	{
-		glfwSetInputMode(_mainWorld->_mainWindow, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+		glfwSetInputMode(main_world.main_window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
 	}
 	
-	glfwSetCursorPosCallback(_mainWorld->_mainWindow, &mouse_callback);
-	glfwSetKeyCallback(_mainWorld->_mainWindow, &keyboard_callback);
-	glfwSetMouseButtonCallback(_mainWorld->_mainWindow, &mouse_button_callback);
+	glfwSetCursorPosCallback(main_world.main_window, &mouse_callback);
+	glfwSetKeyCallback(main_world.main_window, &keyboard_callback);
+	glfwSetMouseButtonCallback(main_world.main_window, &mouse_button_callback);
 	
-	glfwSetFramebufferSizeCallback(_mainWorld->_mainWindow, &framebuffer_resize_callback);
+	glfwSetFramebufferSizeCallback(main_world.main_window, &framebuffer_resize_callback);
 
-	double lastTimer = glfwGetTime();
-	double slowupdateCounter = 0.5;
+	double last_timer = glfwGetTime();
+	double slowupdate_counter = 0.5;
 
-	while(!glfwWindowShouldClose(_mainWorld->_mainWindow))
+	while(!glfwWindowShouldClose(main_world.main_window))
 	{
-		_mainWorld->update_func();
-		_mainWorld->draw_update();
+		main_world.update_func();
+		main_world.draw_update();
 		
-		slowupdateCounter += glfwGetTime()-lastTimer;
-		lastTimer = glfwGetTime();
+		slowupdate_counter += glfwGetTime()-last_timer;
+		last_timer = glfwGetTime();
 		
-		if(slowupdateCounter>0.5)
+		if(slowupdate_counter>0.5)
 		{
-			slowupdateCounter -= 0.5;
+			slowupdate_counter -= 0.5;
 			update_slow();
 		}
 		
 		glfwPollEvents();
 	}
 	
-	_mainWorld->window_terminate();
+	main_world.window_terminate();
 	
 	glfwTerminate();
 	return 0;

@@ -11,79 +11,51 @@
 #include "worldtypes.h"
 #include "wblock.h"
 
-class BlockTexAtlas
-{
-public:
-	BlockTexAtlas();
-	BlockTexAtlas(int width, int height);
-	
-	void set_horizontal_blocks(int hBlocks);
-	void set_vertical_blocks(int vBlocks);
-	
-protected:
-	int _width;
-	int _height;
-	
-	int _horizontalBlocks;
-	int _verticalBlocks;
-	
-	float _texOffset;
-	
-	friend class WorldChunk;
-};
 
+class world_chunk;
 
-class WorldChunk;
-
-class WorldGenerator
+class world_generator
 {
 protected:
-	struct VecPos
+	struct vec_pos
 	{
-		Vec3d<int> chunkPos;
-		WorldTypes::UpdateChunk walls;
-		Vec3d<int> blockPos;
-		WorldBlock block;
+		vec3d<int> chunk_pos;
+		world_types::wall_states walls;
+		vec3d<int> block_pos;
+		world_block block;
 	};
 
 public:
-	typedef std::array<WorldTypes::ClimatePoint, chunkSize*chunkSize> ClimateNoise;
+	typedef std::array<world_types::climate_point, chunk_size*chunk_size> climate_noise;
 
-	WorldGenerator();
-	WorldGenerator(YandereInitializer* init, unsigned atlasTextureID);
+	world_generator() {};
 	
 	void seed(unsigned seed);
 	
-	std::array<float, chunkSize*chunkSize> generate_noise(Vec3d<int> pos, float noiseScale, float noiseStrength);
-	ClimateNoise generate_climate(Vec3d<int> pos, float temperatureScale, float humidityScale);
+	std::array<float, chunk_size*chunk_size> generate_noise(vec3d<int> pos, float noise_scale, float noise_strength);
+	climate_noise generate_climate(vec3d<int> pos, float temperature_scale, float humidity_scale);
 	
-	void chunk_gen(WorldChunk& chunk);
-	WorldTypes::Biome get_biome(float temperature, float humidity);
-	void gen_plants(WorldChunk& genChunk, ClimateNoise& climateArr);
+	world_chunk chunk_gen(const vec3d<int> position);
+	world_types::biome get_biome(float temperature, float humidity);
+	void gen_plants(world_chunk& gen_chunk, climate_noise& climate_arr);
 	
-	Vec3d<int> get_ground(WorldChunk& checkChunk, int x, int z);
+	vec3d<int> get_ground(world_chunk& check_chunk, int x, int z);
 	
-	void shared_place(WorldChunk& chunk, Vec3d<int> position, WorldBlock block);
+	void shared_place(world_chunk& chunk, const vec3d<int> position, const world_block block);
 	
-	void place_in_chunk(Vec3d<int> chunkPos, WorldTypes::UpdateChunk walls, Vec3d<int> blockPos, WorldBlock block);
-	void place_in_chunk(std::vector<VecPos>& blocks);
-	
-	unsigned atlasTextureID;
+	void place_in_chunk(vec3d<int> chunk_pos, world_types::wall_states walls, vec3d<int> block_pos, world_block block);
+	void place_in_chunk(std::vector<vec_pos>& blocks);
 
 protected:
-	std::mutex _mtxBlockPlace;
+	std::mutex _mtx_block_place;
 	
-	std::vector<VecPos> _blockPlaceVec;
+	std::vector<vec_pos> _block_place_vec;
 
-	YandereInitializer* _init;
-	BlockTexAtlas _texAtlas;
-
-	NoiseGenerator _noiseGen;
+	noise_generator _noise_gen;
 
 	unsigned _seed = 1;
-
-	friend class WorldChunk;
-	friend class WorldController;
+	
+	friend class world_controller;
 };
 
 #endif

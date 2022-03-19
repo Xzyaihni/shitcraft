@@ -7,21 +7,21 @@
 
 #include "noise.h"
 
-NoiseGenerator::NoiseGenerator()
+noise_generator::noise_generator()
 {
-	std::mt19937 sGen(1);
+	std::mt19937 s_gen(1);
 
-	_sOffset = sGen();
+	_s_offset = s_gen();
 }
 
-NoiseGenerator::NoiseGenerator(unsigned seed)
+noise_generator::noise_generator(unsigned seed)
 {
-	std::mt19937 sGen(seed);
+	std::mt19937 s_gen(seed);
 
-	_sOffset = sGen();
+	_s_offset = s_gen();
 }
 
-unsigned NoiseGenerator::fast_random(unsigned seed)
+unsigned noise_generator::fast_random(unsigned seed)
 {
 	seed ^= (seed << 13);
 	seed ^= (seed >> 7);
@@ -30,7 +30,7 @@ unsigned NoiseGenerator::fast_random(unsigned seed)
 	return seed;
 }
 
-unsigned NoiseGenerator::fast_hash(float val)
+unsigned noise_generator::fast_hash(float val)
 {
 	static_assert(sizeof(unsigned)==sizeof(val), "type sizes dont match, yikes");
 	
@@ -39,40 +39,40 @@ unsigned NoiseGenerator::fast_hash(float val)
 	return hashed & 0xfffffff8;
 }
 
-float NoiseGenerator::vec_gradient(float xH, float yH, float xP, float yP)
+float noise_generator::vec_gradient(float x_h, float y_h, float x_p, float y_p)
 {
-	int yS = fast_hash(yH);
+	int y_s = fast_hash(y_h);
 
-	float valX = (fast_random((fast_hash(xH) ^ ((yS<<6)+(yS>>2)))) ^ ((_sOffset<<7)+(_sOffset>>3)))/static_cast<float>(UINT_MAX);
-	float valY = std::sqrt(1-valX*valX);
+	float val_x = (fast_random((fast_hash(x_h) ^ ((y_s<<6)+(y_s>>2)))) ^ ((_s_offset<<7)+(_s_offset>>3)))/static_cast<float>(UINT_MAX);
+	float val_y = std::sqrt(1-val_x*val_x);
 	
-	return valX*xP+valY*yP;
+	return val_x*x_p+val_y*y_p;
 }
 
-float NoiseGenerator::smoothstep(float val)
+float noise_generator::smoothstep(float val)
 {
 	return val*val * (3 - 2*val);
 }
 
-float NoiseGenerator::noise(float x, float y)
+float noise_generator::noise(float x, float y)
 {	
-	constexpr float twiceMaxVal = std::sqrt(2)/2;
-	constexpr float maxVal = std::sqrt(2)/4;
+	const float twice_max_val = std::sqrt(2)/2;
+	const float max_val = std::sqrt(2)/4;
 
-	int cellX = std::floor(x);
-	int cellY = std::floor(y);
+	int cell_x = std::floor(x);
+	int cell_y = std::floor(y);
 	
-	float distX = x-cellX;
-	float distY = y-cellY;
+	float dist_x = x-cell_x;
+	float dist_y = y-cell_y;
 	
-	float smoothX = smoothstep(distX);
-	float noiseVal = std::lerp(std::lerp(
-	vec_gradient(cellX, cellY, distX, distY),
-	vec_gradient(cellX+1, cellY, distX-1, distY), smoothX),
+	float smoothX = smoothstep(dist_x);
+	float noise_val = std::lerp(std::lerp(
+	vec_gradient(cell_x, cell_y, dist_x, dist_y),
+	vec_gradient(cell_x+1, cell_y, dist_x-1, dist_y), smoothX),
 	std::lerp(
-	vec_gradient(cellX, cellY+1, distX, distY-1),
-	vec_gradient(cellX+1, cellY+1, distX-1, distY-1), smoothX), smoothstep(distY));
+	vec_gradient(cell_x, cell_y+1, dist_x, dist_y-1),
+	vec_gradient(cell_x+1, cell_y+1, dist_x-1, dist_y-1), smoothX), smoothstep(dist_y));
 
 	//the range should be between 0 and 1
-	return (maxVal+noiseVal)/twiceMaxVal;
+	return (max_val+noise_val)/twice_max_val;
 }

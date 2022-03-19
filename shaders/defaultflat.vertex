@@ -1,19 +1,19 @@
 #version 330 core
 
-layout (location = 0) in vec3 aPos;
-layout (location = 1) in vec2 aTexCoord;
-layout (location = 2) in vec4 aColor;
-layout (location = 3) in mat4 aModelMat;
+layout (location = 0) in vec3 a_pos;
+layout (location = 1) in vec2 a_tex_coordinate;
+layout (location = 2) in vec4 a_color;
+layout (location = 3) in mat4 a_model_mat;
 
-uniform mat4 viewMat;
-uniform mat4 projectionMat;
+uniform mat4 view_mat;
+uniform mat4 projection_mat;
 
-out vec4 vertexColor;
-out vec2 texCoord;
+out vec4 vertex_color;
+out vec2 tex_coordinate;
 
 void main()
 {
-	gl_Position = projectionMat * viewMat * aModelMat * vec4(aPos, 1.0f);
-	vertexColor = aColor;
-	texCoord = aTexCoord;
+	gl_Position = projection_mat * view_mat * a_model_mat * vec4(a_pos, 1.0f);
+	vertex_color = a_color;
+	tex_coordinate = a_tex_coordinate;
 }

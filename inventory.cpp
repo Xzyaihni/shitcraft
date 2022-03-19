@@ -1,9 +1,9 @@
 #include "inventory.h"
 
-Item::Item()
+item::item()
 {
 }
 
-Loot::Loot()
+loot::loot()
 {
 }

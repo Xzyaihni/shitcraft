@@ -3,28 +3,28 @@
 
 #include "types.h"
 
-namespace WorldTypes
+namespace world_types
 {
-	struct TexPos
+	struct tex_pos
 	{
 		int x;
 		int y;
 	};
 	
-	struct ClimatePoint
+	struct climate_point
 	{
 		float temperature;
 		float humidity;
 	};
 
-	enum Biome
+	enum biome
 	{
 		forest = 0,
 		desert,
 		hell
 	};
 	
-	enum Block
+	enum block
 	{
 		air = 0,
 		dirt,
@@ -36,17 +36,17 @@ namespace WorldTypes
 		lava
 	};
 	
-	struct TextureFace
+	struct texture_face
 	{
-		WorldTypes::TexPos forward;
-		WorldTypes::TexPos back;
-		WorldTypes::TexPos right;
-		WorldTypes::TexPos left;
-		WorldTypes::TexPos up;
-		WorldTypes::TexPos down;
+		tex_pos forward;
+		tex_pos back;
+		tex_pos right;
+		tex_pos left;
+		tex_pos up;
+		tex_pos down;
 	};
 	
-	struct UpdateChunk
+	struct wall_states
 	{
 		bool right = true;
 		bool left = true;
@@ -56,7 +56,7 @@ namespace WorldTypes
 		bool back = true;
 		
 		bool walls_or() {return right || left || up || down || forward || back;};
-		void add_walls(UpdateChunk walls)
+		void add_walls(wall_states walls)
 		{
 			right = right||walls.right;
 			left = left||walls.left;
@@ -67,12 +67,12 @@ namespace WorldTypes
 		};
 	};
 	
-	struct BlockInfo
+	struct block_info
 	{
-		bool grassy = false;
+		bool grassy;
 	};
 	
-	constexpr float blockModelSize = 1.0f/static_cast<float>(chunkSize);
+	const float block_model_size = 1.0f/static_cast<float>(chunk_size);
 };
 
 #endif

@@ -4,20 +4,20 @@
 #include <vector>
 #include <string>
 
-class Item
+class item
 {
 public:
-	Item();
+	item();
 
 	std::string name;
 };
 
-class Loot
+class loot
 {
 public:
-	Loot();
+	loot();
 	
-	std::vector<Item> itemsList;
+	std::vector<item> items_vec;
 };
 
 #endif

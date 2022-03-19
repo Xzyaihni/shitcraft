@@ -8,74 +8,73 @@
 
 #include "types.h"
 
-class WorldChunk;
-class PhysicsController;
+struct full_chunk;
+class physics_controller;
 
 
-struct RaycastResult
+struct raycast_result
 {
-	Direction direction;
-	Vec3d<int> chunk;
-	Vec3d<int> block;
+	ytype::direction direction;
+	vec3d<int> chunk;
+	vec3d<int> block;
 };
 
-class PhysicsObject
+class physics_object
 {
 public:
-	PhysicsObject();
-	PhysicsObject(PhysicsController* physCtl);
+	physics_object();
+	physics_object(physics_controller* phys_ctl);
 	
-	Vec3d<float> position = {0, 0, 0};
-	Vec3d<float> velocity = {0, 0, 0};
-	Vec3d<float> acceleration = {0, 0, 0};
-	Vec3d<float> force = {0, 0, 0};
+	vec3d<float> position = {0, 0, 0};
+	vec3d<float> velocity = {0, 0, 0};
+	vec3d<float> acceleration = {0, 0, 0};
+	vec3d<float> force = {0, 0, 0};
 	
-	Vec3d<float> rotationAxis = {1, 0, 0};
+	vec3d<float> rotation_axis = {1, 0, 0};
 	float rotation = 0;
 	
-	Vec3d<float> direction = {0, 0, 0};
+	vec3d<float> direction = {0, 0, 0};
 	
-	Vec3d<int> activeChunkPos;
+	vec3d<int> active_chunk_pos;
 	
 	bool floating = false;
-	bool isStatic = false;
+	bool is_static = false;
 	
 	float size = 1;
 	float mass = 1;
 	
-	void update(double timeDelta);
+	void update(double time_d);
 	
 private:
-	static Vec3d<float> apply_friction(Vec3d<float> velocity, float friction);
+	static vec3d<float> apply_friction(vec3d<float> velocity, float friction);
 
-	PhysicsController* _physCtl = nullptr;
+	physics_controller* _phys_ctl = nullptr;
 	
 	//sphere's drag coefficient
-	float dragCoefficient = 0.47f;
+	float drag_coefficient = 0.47f;
 };
 
-class PhysicsController
+class physics_controller
 {
 public:
-	PhysicsController();
-	PhysicsController(std::map<Vec3d<int>, WorldChunk>* worldChunks);
+	physics_controller(std::map<vec3d<int>, full_chunk>& world_chunks);
 	
-	void physics_update(double timeDelta);
+	void physics_update(double time_d);
 	
-	RaycastResult raycast(Vec3d<float> startPos, Vec3d<float> direction, int length);
-	RaycastResult raycast(Vec3d<float> startPos, Vec3d<float> endPos);
+	raycast_result raycast(vec3d<float> start_pos, vec3d<float> direction, int length);
+	raycast_result raycast(vec3d<float> start_pos, vec3d<float> end_pos);
 	
-	int raycast_distance(Vec3d<float> rayStart, RaycastResult raycast);
+	int raycast_distance(vec3d<float> ray_start, raycast_result raycast);
 	
-	std::vector<std::reference_wrapper<PhysicsObject>> physObjs;
+	std::vector<std::reference_wrapper<physics_object>> phys_objs;
 	
-	float airDensity = 1.225f;
-	Vec3d<float> gravity = {0, -1, 0};
+	float air_density = 1.225f;
+	vec3d<float> gravity = {0, -1, 0};
 	
-	static Vec3d<float> calc_dir(float yaw, float pitch);
+	static vec3d<float> calc_dir(float yaw, float pitch);
 	
 private:
-	std::map<Vec3d<int>, WorldChunk>* _worldChunks;
+	std::map<vec3d<int>, full_chunk>& _world_chunks;
 };
 
 #endif
