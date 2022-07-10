@@ -450,6 +450,8 @@ bool controller::reassign_chunks(const vec3d<int> pos) noexcept
 	if(_center_pos==pos)
 		return false;
 
+	_chunk_gen_pool->exit_threads();
+
 	const bool overlap = squares_overlap(pos);
 
 	if(overlap)
@@ -474,6 +476,8 @@ bool controller::reassign_chunks(const vec3d<int> pos) noexcept
 	{
 		clear();
 	}
+
+	generate_pool();
 
 	return true;
 }
