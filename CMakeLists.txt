@@ -57,6 +57,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE "${PROJECT_SOURCE_DIR}/yander
 ${GLFW_INCLUDE_DIRS}
 ${OPENGL_INCLUDE_DIR}
 ${GLUT_INCLUDE_DIR}
+${GLM_INCLUDE_DIRS}
 ${FREETYPE_INCLUDE_DIRS})
 
 
@@ -74,9 +75,7 @@ endif()
 
 target_link_libraries(${PROJECT_NAME} tbb)
 target_link_libraries(${PROJECT_NAME} ${OPENGL_LIBRARIES})
-target_link_libraries(${PROJECT_NAME} glfw3 ${GLFW_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} glfw ${GLFW_LIBRARIES})
 target_link_libraries(${PROJECT_NAME} GLEW::glew)
 target_link_libraries(${PROJECT_NAME} ${X11_LIBRARIES})
 target_link_libraries(${PROJECT_NAME} Freetype::Freetype)
-
-target_link_libraries(${PROJECT_NAME} glm)
