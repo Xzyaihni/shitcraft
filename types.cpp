@@ -2,56 +2,69 @@
 
 #include "types.h"
 
-ytype::direction direction_opposite(const ytype::direction direction)
+
+using namespace ytype;
+
+direction ytype::direction_opposite(const direction direction)
 {
 	switch(direction)
 	{
-		case ytype::direction::left:
-		return ytype::direction::right;
+		case direction::left:
+		return direction::right;
 		
-		case ytype::direction::right:
-		return ytype::direction::left;
+		case direction::right:
+		return direction::left;
 		
-		case ytype::direction::up:
-		return ytype::direction::down;
+		case direction::up:
+		return direction::down;
 		
-		case ytype::direction::down:
-		return ytype::direction::up;
+		case direction::down:
+		return direction::up;
 		
-		case ytype::direction::forward:
-		return ytype::direction::back;
+		case direction::forward:
+		return direction::back;
 		
-		case ytype::direction::back:
-		return ytype::direction::forward;
+		case direction::back:
+		return direction::forward;
 	
 		default:
-		return ytype::direction::none;
+		return direction::none;
 	}
 }
 
-vec3d<int> direction_add(const vec3d<int> add_vec, const ytype::direction direction, const int offset)
+vec3d<int> ytype::direction_offset(const direction direction)
 {
 	switch(direction)
 	{
-		case ytype::direction::left:
-		return {add_vec.x-offset, add_vec.y, add_vec.z};
-		
-		case ytype::direction::right:
-		return {add_vec.x+offset, add_vec.y, add_vec.z};
-		
-		case ytype::direction::up:
-		return {add_vec.x, add_vec.y+offset, add_vec.z};
-		
-		case ytype::direction::down:
-		return {add_vec.x, add_vec.y-offset, add_vec.z};
-		
-		case ytype::direction::forward:
-		return {add_vec.x, add_vec.y, add_vec.z+offset};
-		
-		case ytype::direction::back:
-		return {add_vec.x, add_vec.y, add_vec.z-offset};
-	
+		case direction::left:
+		return vec3d<int>{-1, 0, 0};
+
+		case direction::right:
+		return vec3d<int>{1, 0, 0};
+
+		case direction::up:
+		return vec3d<int>{0, 1, 0};
+
+		case direction::down:
+		return vec3d<int>{0, -1, 0};
+
+		case direction::forward:
+		return vec3d<int>{0, 0, 1};
+
+		case direction::back:
+		return vec3d<int>{0, 0, -1};
+
 		default:
-		return add_vec;
+		return vec3d<int>{0, 0, 0};
 	}
+}
+
+vec3d<int> ytype::direction_add(const vec3d<int> add_vec, const direction direction, const int offset)
+{
+	return add_vec+direction_offset(direction)*offset;
+}
+
+int ytype::round_away(const float val) noexcept
+{
+	return val<0?static_cast<int>(std::floor(val)):static_cast<int>(std::ceil(val));
 }

@@ -1,7 +1,8 @@
 #include "wblock.h"
 
-using namespace world_types;
 
+using namespace ytype;
+using namespace world_types;
 
 void world_block::update()
 {
@@ -31,15 +32,15 @@ texture_face world_block::texture() const
 		case block::log:
 			return texture_face{{3, 0}, {3, 0}, {3, 0}, {3, 0}, {3, 1}, {3, 1}};
 			
-		case block::leaf:
-			return texture_face{{4, 0}, {4, 0}, {4, 0}, {4, 0}, {4, 0}, {4, 0}};
-			
 		case block::cactus:
 			return texture_face{{5, 0}, {5, 0}, {5, 0}, {5, 0}, {5, 1}, {5, 1}};
 			
 		case block::lava:
 			return texture_face{{6, 0}, {6, 0}, {6, 0}, {6, 0}, {6, 0}, {6, 0}};
 		
+		case block::leaf:
+			return texture_face{{0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}};
+
 		default:
 			return texture_face{};
 	}

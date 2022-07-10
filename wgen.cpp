@@ -1,12 +1,19 @@
 #include <array>
 #include <iostream>
 #include <random>
+#include <algorithm>
 
 #include "wgen.h"
 #include "chunk.h"
 
-using namespace yanderegl;
+
 using namespace world_types;
+
+world_generator::world_generator(const graphics_state graphics)
+: _graphics(graphics),
+_seed(time(NULL))
+{
+}
 
 void world_generator::seed(unsigned seed)
 {
@@ -14,9 +21,10 @@ void world_generator::seed(unsigned seed)
 	_noise_gen = noise_generator(seed);
 }
 
-std::array<float, chunk_size*chunk_size> world_generator::generate_noise(vec3d<int> pos, float noise_scale, float noise_strength)
+std::array<float, chunk_size*chunk_size>
+world_generator::generate_noise(const vec3d<int> pos, const float noise_scale, const float noise_strength) const noexcept
 {
-	float add_noise = noise_scale/static_cast<float>(chunk_size);
+	const float add_noise = noise_scale/static_cast<float>(chunk_size);
 
 	std::array<float, chunk_size*chunk_size> noise_arr;
 	
@@ -33,10 +41,11 @@ std::array<float, chunk_size*chunk_size> world_generator::generate_noise(vec3d<i
 	return noise_arr;
 }
 
-std::array<climate_point, chunk_size*chunk_size> world_generator::generate_climate(vec3d<int> pos, float temperature_scale, float humidity_scale)
+std::array<climate_point, chunk_size*chunk_size>
+world_generator::generate_climate(const vec3d<int> pos, const float temperature_scale, const float humidity_scale) const noexcept
 {
-	float add_temperature = temperature_scale/static_cast<float>(chunk_size);
-	float add_humidity = humidity_scale/static_cast<float>(chunk_size);
+	const float add_temperature = temperature_scale/static_cast<float>(chunk_size);
+	const float add_humidity = humidity_scale/static_cast<float>(chunk_size);
 
 	std::array<climate_point, chunk_size*chunk_size> noise_arr;
 	
@@ -46,8 +55,8 @@ std::array<climate_point, chunk_size*chunk_size> world_generator::generate_clima
 	{
 		for(int z = 0; z < chunk_size; ++z, ++noise_index)
 		{
-			float temperature_noise = _noise_gen.noise(pos.x*temperature_scale+x*add_temperature, pos.z*temperature_scale+z*add_temperature);
-			float humidity_noise = _noise_gen.noise(pos.x*humidity_scale+x*add_humidity, pos.z*humidity_scale+z*add_humidity);
+			const float temperature_noise = _noise_gen.noise(pos.x*temperature_scale+x*add_temperature, pos.z*temperature_scale+z*add_temperature);
+			const float humidity_noise = _noise_gen.noise(pos.x*humidity_scale+x*add_humidity, pos.z*humidity_scale+z*add_humidity);
 		
 			noise_arr[noise_index] = climate_point{temperature_noise, humidity_noise};
 		}
@@ -56,8 +65,15 @@ std::array<climate_point, chunk_size*chunk_size> world_generator::generate_clima
 	return noise_arr;
 }
 
+full_chunk world_generator::full_chunk_gen(const vec3d<int> position) noexcept
+{
+	return full_chunk(chunk_gen(position), _graphics);
+}
+
 world_chunk world_generator::chunk_gen(const vec3d<int> position)
 {
+	assert(_graphics.camera!=nullptr && _graphics.shader!=nullptr);
+
 	world_chunk chunk(position);
 
 	const float gen_height = 2.25f;
@@ -68,7 +84,7 @@ world_chunk world_generator::chunk_gen(const vec3d<int> position)
 	
 	chunk.set_empty(false);
 	
-	bool overground = position.y>=gen_depth;
+	const bool overground = position.y>=gen_depth;
 	
 	if(!overground)
 	{
@@ -94,25 +110,11 @@ world_chunk world_generator::chunk_gen(const vec3d<int> position)
 		{
 			for(int z = 0; z < chunk_size; ++z, ++block_index)
 			{
-				int maps_index = x*chunk_size+z;
-				float c_noise;
+				const int maps_index = x*chunk_size+z;
+				const float c_temperature = climate_arr[maps_index].temperature;
+				const biome c_biome = get_biome(c_temperature, climate_arr[maps_index].humidity);
 			
-				biome c_biome = get_biome(climate_arr[maps_index].temperature, climate_arr[maps_index].humidity);
-			
-				switch(c_biome)
-				{
-					case biome::hell:
-					{
-						c_noise = (large_noise_arr[maps_index]/4*medium_noise_arr[maps_index]/4+small_noise_arr[maps_index]/4) * chunk_size;
-						break;
-					}
-				
-					default:
-					{
-						c_noise = (large_noise_arr[maps_index]*medium_noise_arr[maps_index]+small_noise_arr[maps_index]) * chunk_size;
-						break;
-					}
-				}
+				const float c_noise = (large_noise_arr[maps_index]*(1-c_temperature)*medium_noise_arr[maps_index]+small_noise_arr[maps_index]) * chunk_size;
 			
 				if(position.y*chunk_size+y<c_noise)
 				{
@@ -153,7 +155,7 @@ world_chunk world_generator::chunk_gen(const vec3d<int> position)
 	return chunk;
 }
 
-biome world_generator::get_biome(float temperature, float humidity)
+biome world_generator::get_biome(float temperature, float humidity) const noexcept
 {
 	if(temperature>0.5f && humidity<0.5f)
 	{
@@ -167,30 +169,26 @@ biome world_generator::get_biome(float temperature, float humidity)
 	}
 }
 
-vec3d<int> world_generator::get_ground(world_chunk& check_chunk, int x, int z)
+vec3d<int>
+world_generator::get_ground(const world_chunk& check_chunk, const int x, const int z) const noexcept
 {
-	vec3d<int> ground_pos = {0, 0, 0};
-					
 	for(int i = 0; i < chunk_size; ++i)
 	{
 		if(check_chunk.block({x, i, z}).transparent())
 		{
-			ground_pos = {x, i, z};
-			break;
+			return vec3d<int>{x, i, z};
 		}
 	}
-	
-	return ground_pos;
+
+	return vec3d<int>{x, 0, z};
 }
 
-void world_generator::gen_plants(world_chunk& gen_chunk, std::array<climate_point, chunk_size*chunk_size>& climate_arr)
+void world_generator::gen_plants(world_chunk& gen_chunk, const std::array<climate_point, chunk_size*chunk_size>& climate_arr) noexcept
 {
 	std::mt19937 s_gen(_seed^(gen_chunk.position().x)^(gen_chunk.position().z));
 	std::uniform_int_distribution distrib(1, 1000);
 	
 	std::uniform_int_distribution plant_distrib(1, 8);
-
-	int plants_generated = 0;
 
 	int point_index = 0;
 	for(int x = 0; x < chunk_size; ++x)
@@ -203,15 +201,13 @@ void world_generator::gen_plants(world_chunk& gen_chunk, std::array<climate_poin
 				{
 					if(distrib(s_gen) < (climate_arr[point_index].humidity-0.10f)*10)
 					{
-						++plants_generated;
-					
-						vec3d<int> ground_pos = get_ground(gen_chunk, x, z);
+						const vec3d<int> ground_pos = get_ground(gen_chunk, x, z);
 					
 						if(ground_pos.y==0)
 							continue;
 						
 						
-						int cactus_height = 2+plant_distrib(s_gen);
+						const int cactus_height = 2+plant_distrib(s_gen);
 							
 						for(int i = 0; i < cactus_height; ++i)
 						{
@@ -225,32 +221,30 @@ void world_generator::gen_plants(world_chunk& gen_chunk, std::array<climate_poin
 				{
 					if(distrib(s_gen) < (climate_arr[point_index].humidity-0.45f)*50)
 					{
-						++plants_generated;
-						
-						vec3d<int> ground_pos = get_ground(gen_chunk, x, z);
+						const vec3d<int> ground_pos = get_ground(gen_chunk, x, z);
 					
 						if(ground_pos.y==0)
 							continue;
 							
 						
-						int tree_height = plant_distrib(s_gen);
+						const int tree_height = plant_distrib(s_gen);
 						
 						for(int i = 0; i < tree_height; ++i)
 						{
 							shared_place(gen_chunk, {ground_pos.x, ground_pos.y+i, ground_pos.z}, world_block{block::log});
 							
-							int nearestSquare = (std::clamp(tree_height-i, 0, 2))*2+1;
+							const int nearest_square = (std::clamp(tree_height-i, 0, 2))*2+1;
 							
-							int halfSquare = nearestSquare/2;
+							const int half_square = nearest_square/2;
 							
-							for(int tx = 0; tx < nearestSquare; ++tx)
+							for(int tx = 0; tx < nearest_square; ++tx)
 							{
-								for(int ty = 0; ty < nearestSquare; ++ty)
+								for(int ty = 0; ty < nearest_square; ++ty)
 								{
-									if(tx-halfSquare==0 && ty-halfSquare==0)
+									if(tx-half_square==0 && ty-half_square==0)
 										continue;
 									
-									shared_place(gen_chunk, {ground_pos.x+tx-halfSquare, ground_pos.y+i+1, ground_pos.z+ty-halfSquare}, world_block{block::leaf});
+									shared_place(gen_chunk, {ground_pos.x+tx-half_square, ground_pos.y+i+1, ground_pos.z+ty-half_square}, world_block{block::leaf});
 								}
 							}
 						}
@@ -265,41 +259,36 @@ void world_generator::gen_plants(world_chunk& gen_chunk, std::array<climate_poin
 			}
 		}
 	}
-	
-	gen_chunk.set_plants_amount(plants_generated);
 }
 
 
-void world_generator::shared_place(world_chunk& chunk, const vec3d<int> position, const world_block block)
+void world_generator::shared_place(world_chunk& chunk, const vec3d<int> position, const world_block block) noexcept
 {
 	if(position.x<0 || position.y<0 || position.z<0
 	|| position.x>(chunk_size-1) || position.y>(chunk_size-1) || position.z>(chunk_size-1))
 	{
 		//outside of current chunk
-		vec3d<int> place_chunk = world_chunk::active_chunk(position);
+		const vec3d<int> place_chunk = world_chunk::active_chunk(position);
 		
 		place_in_chunk(chunk.position()+place_chunk,
-		wall_states{position.x%chunk_size==chunk_size-1, position.x%chunk_size==0,
-		position.y%chunk_size==chunk_size-1, position.y%chunk_size==0,
-		position.z%chunk_size==chunk_size-1, position.z%chunk_size==0},
-		(position-place_chunk*chunk_size), block);
+			world_chunk::closest_bound_block(position), block);
 	} else
 	{
 		chunk.block(position) = block;
 	}
 }
 
-void world_generator::place_in_chunk(vec3d<int> chunk_pos, wall_states walls, vec3d<int> block_pos, world_block block)
+void world_generator::place_in_chunk(const vec3d<int> chunk_pos, const vec3d<int> pos, const world_block block) noexcept
 {
 	std::lock_guard<std::mutex> lock_b(_mtx_block_place);
 
-	_block_place_vec.reserve(1);
-	_block_place_vec.emplace_back(chunk_pos, walls, block_pos, block);
+	_blocks_map[chunk_pos].emplace_back(pos, block);
 }
 
-void world_generator::place_in_chunk(std::vector<vec_pos>& blocks)
+void world_generator::place_in_chunk(const vec3d<int> chunk_pos, const std::vector<block_pos>& blocks) noexcept
 {
 	std::lock_guard<std::mutex> lock_b(_mtx_block_place);
 
-	_block_place_vec.insert(_block_place_vec.end(), blocks.begin(), blocks.end());
+	std::vector<block_pos>& c_blocks = _blocks_map[chunk_pos];
+	c_blocks.insert(c_blocks.end(), blocks.begin(), blocks.end());
 }

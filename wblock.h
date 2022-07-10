@@ -2,6 +2,7 @@
 #define WBLOCK_H
 
 #include "worldtypes.h"
+#include "types.h"
 #include "inventory.h"
 
 

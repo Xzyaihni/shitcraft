@@ -19,14 +19,17 @@
 #include "physics.h"
 #include "wctl.h"
 
+#include "ygui.h"
 
-using namespace yanderegl;
+using namespace yangl;
+using namespace ytype;
 using namespace world_types;
 
 class game_controller
 {
 private:
-	enum ykey {forward = 0, back, right, left, jump, crouch, LAST};
+	enum ykey {forward = 0, back, right, left, jump, crouch, yLAST};
+	enum text_id {xpos = 0, ypos, zpos, fps, tLAST};
 
 public:
 	game_controller();
@@ -54,7 +57,7 @@ public:
 	GLFWwindow* main_window;
 	world_controller world_ctl;
 	
-	yan_color sky_color;
+	ycolor sky_color;
 	
 	int screen_width;
 	int screen_height;
@@ -84,45 +87,59 @@ private:
 	vec3d<int> _look_chunk;
 	vec3d<int> _look_block;
 	
-	yandere_object _look_plane;
+	generic_object _look_plane;
 	
 
 	int _chunks_amount;
 	
-	yandere_shader_program _default_shader;
-	yandere_shader_program _game_object_shader;
-	yandere_shader_program _gui_shader;
+	core::shader_program _game_object_shader;
+
+	const font_data* _default_font;
 	
 	unsigned _shader_player_pos_id = -1;
 	
 
 	character _main_character;
 
-	std::unique_ptr<yandere_controller> _yan_control;
-	std::unique_ptr<physics_controller> _main_phys_ctl;
+	std::unique_ptr<controller> _yan_control;
+	std::unique_ptr<physics::raycaster> _main_raycaster;
+	physics::controller _main_physics;
 	
-	yandere_camera _main_camera;
-	yandere_camera _gui_camera;
+	camera _main_camera;
 	
-	yandere_gui _main_gui;
+	gui::controller _main_gui;
+	gui::panel* _debug_panel;
+
+	std::array<gui::store_object<text_object>*, text_id::tLAST> _texts_arr;
 	
-	std::vector<yandere_object> _gui_elements;
-	
-	std::map<std::string, unsigned> _textures_map;
-	std::map<std::string, unsigned> _shaders_map;
-	std::map<std::string, yandere_text> _texts_map;
+	std::map<std::string, core::texture> _textures_map;
+	std::map<std::string, core::shader> _shaders_map;
 	
 	float _gui_width;
 	float _gui_height;
 };
 
+void APIENTRY debug_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam)
+{
+	const std::vector<unsigned> ignore_ids({131185});
 
+	for(const auto& num : ignore_ids)
+	{
+		if(id==num)
+			return;
+	}
+
+	std::cout << "opengl error " << id << ": " << message << std::endl;
+}
+
+static const int font_quality = 75;
 game_controller main_world;
 
 
 game_controller::game_controller()
+: _main_camera({0, 0, 0}, {0, 0, 1})
 {
-	control_keys = std::vector(ykey::LAST, 0);
+	control_keys = std::vector(ykey::yLAST, 0);
 
 	control_keys[ykey::forward] = GLFW_KEY_W;
 	control_keys[ykey::back] = GLFW_KEY_S;
@@ -137,136 +154,129 @@ game_controller::game_controller()
 	screen_width = 640;
 	screen_height = 640;
 	mouse_sens = 250.0f;
-	
-	_main_camera = yandere_camera({0, 0, 0}, {0, 0, 1});
-	resize_func(screen_width, screen_height);
-	
-	_gui_camera = yandere_camera({0, 0, 1}, {0, 0, 0});
-	
-	_gui_width = 1000;
-	_gui_height = 1000;
-	_gui_camera.create_projection({
-	-_gui_width,
-	_gui_width,
-	-_gui_height,
-	_gui_height}, {0, 2});
 }
 
 void game_controller::graphics_init()
 {
 	if(!glfwInit())
-	{
 		throw std::runtime_error("glfw init failed!");
-	}
-	
+
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-	
+
+	#ifdef DEBUG
+	glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
+	#endif
+
 	main_window = glfwCreateWindow(screen_width, screen_height, "shitcraft", NULL, NULL);
 	if(!main_window)
-	{
 		throw std::runtime_error("main window creation failed!");
-	}
-	
+
 	glfwMakeContextCurrent(main_window);
-	glViewport(0, 0, screen_width, screen_height);
+	resize_func(screen_width, screen_height);
 
-	_yan_control = std::make_unique<yandere_controller>(true, true, true);
+	_yan_control = std::make_unique<controller>(controller::options{});
 
-	yandere_resources& yan_resources = _yan_control->resources();
-	_shaders_map = yan_resources.load_shaders_from("./shaders");
-	_textures_map = yan_resources.load_textures_from("./textures");
-	
-	_yan_control->load_font("./fonts/FreeSans.ttf");
-	
-	
-	_default_shader = _yan_control->create_shader_program({_shaders_map["defaultflat.fragment"], _shaders_map["defaultflat.vertex"]});
-	_game_object_shader = _yan_control->create_shader_program({_shaders_map["gameobject.fragment"], _shaders_map["gameobject.vertex"]});
-	_gui_shader = _yan_control->create_shader_program({_shaders_map["text.fragment"], _shaders_map["defaultflat.vertex"]});
-	
-	
-	world_ctl = world_controller(_yan_control.get(), main_window, &_main_character, &_main_camera, _game_object_shader);
-	
+	#ifdef DEBUG
+	glDebugMessageCallback(debug_callback, 0);
+	#endif
+
+	_default_font = _yan_control->load_font("./fonts/FreeSans.ttf", font_quality);
+
+	_shaders_map = controller::load_shaders_from("./shaders");
+	_textures_map = controller::load_textures_from("./textures");
+
+	_game_object_shader = core::shader_program(
+		_shaders_map["gameobject.fragment"],
+		_shaders_map["gameobject.vertex"],
+		core::shader());
+
+
+	_main_character = character();
+	_main_character.move_speed = 500;
+	_main_character.mass = 5;
+	_main_character.floating = true;
+	_main_character.position = {0, 30, 0};
+
+	world_ctl = world_controller(main_window, &_main_character,
+		graphics_state{&_main_camera, &_game_object_shader,
+			&_textures_map.at("block_textures"), &_textures_map.at("transparent_blocks")});
+
+	_main_physics.connect_object(&_main_character);
+	_main_raycaster = std::make_unique<physics::raycaster>(world_ctl.world_chunks);
+	_main_character.set_raycaster(_main_raycaster.get());
+
 	_shader_player_pos_id = _game_object_shader.add_vec3("player_pos");
 	_game_object_shader.set_prop(_game_object_shader.add_vec3("fog_color"), yvec3{sky_color.r, sky_color.g, sky_color.b});
-	_game_object_shader.set_prop(_game_object_shader.add_num("render_distance"), world_ctl.render_dist());
-	
-	unsigned c_seed = time(NULL);
-	world_ctl.create_world(_textures_map["block_textures"], c_seed);	
-	std::cout << "world seed: " << c_seed << std::endl;
-	
-	_main_phys_ctl = std::make_unique<physics_controller>(world_ctl.world_chunks);
-	
-	_main_character = character(_main_phys_ctl.get());
-	_main_character.move_speed = 10;
-	_main_character.mass = 50;
-	_main_character.floating = true;
-	_main_character.position = {500, 30, 1200};
-	_main_phys_ctl->phys_objs.push_back(_main_character);
-	
-	
+	_game_object_shader.set_prop(_game_object_shader.add_num("render_distance"),
+								 world_ctl.render_dist()*chunk_size-chunk_size*2);
+
+
 	mousepos_update(_last_mouse_x, _last_mouse_y);
-	
-	
-	_main_gui = yandere_gui();
-	const float text_padding = 10.0f;
-	const float text_distance = 15.0f;
-	
-	_texts_map.emplace(std::piecewise_construct, 
-	std::forward_as_tuple("x_pos"), 
-	std::forward_as_tuple(_gui_shader, _yan_control->font("FreeSans"), "undefined", 30, 0, 0));
-	
-	float x_pos_height = _texts_map.at("x_pos").text_height();
-	
-	float text_pos_x = -_gui_width+text_padding;
-	
-	_texts_map.at("x_pos").set_position(text_pos_x, _gui_height-x_pos_height-text_padding);
-	_texts_map.emplace(std::piecewise_construct,
-	std::forward_as_tuple("y_pos"),
-	std::forward_as_tuple(_gui_shader, _yan_control->font("FreeSans"), "undefined",
-	30, text_pos_x, _texts_map.at("x_pos").position()[1]-x_pos_height-text_distance));
-	
-	_texts_map.emplace(std::piecewise_construct,
-	std::forward_as_tuple("z_pos"),
-	std::forward_as_tuple(_gui_shader, _yan_control->font("FreeSans"), "undefined",
-	30, text_pos_x, _texts_map.at("y_pos").position()[1]-x_pos_height-text_distance));
-	
-	_texts_map.emplace(std::piecewise_construct,
-	std::forward_as_tuple("fps"),
-	std::forward_as_tuple(_gui_shader, _yan_control->font("FreeSans"), "undefined",
-	30, text_pos_x, _texts_map.at("z_pos").position()[1]-x_pos_height*2-text_distance));
-	
+
+	_main_gui = gui::controller(screen_width, screen_height);
+
+	_debug_panel = &_main_gui.add_panel(yvec2{0, 0}, yvec2{1, 1});
+
+	_texts_arr[text_id::xpos] = &_debug_panel->add_text(gui::object_info{
+		yvec3{0, 1, 0},
+		yvec2{0.2, 0.2},
+		yvec2{0, 1}},
+		_default_font, "undefined");
+
+	_texts_arr[text_id::ypos] = &_debug_panel->add_text(gui::object_info{
+		yvec3{0, 0.9, 0},
+		yvec2{0.2, 0.2},
+		yvec2{0, 0}},
+		_default_font, "undefined");
+
+	_texts_arr[text_id::zpos] = &_debug_panel->add_text(gui::object_info{
+		yvec3{0, 0.8, 0},
+		yvec2{0.2, 0.2},
+		yvec2{0, 0}},
+		_default_font, "undefined");
+
+	_texts_arr[text_id::fps] = &_debug_panel->add_text(gui::object_info{
+		yvec3{0, 0.6, 0},
+		yvec2{0.2, 0.2},
+		yvec2{0, 0}},
+		_default_font, "undefined");
+
 	update_status_texts();
-	
-	_gui_elements.push_back(yandere_object(_gui_shader,
-	yan_resources.create_model(default_model::square), yan_resources.create_texture(_textures_map["crosshair"]),
-	{{0, 0, 0}, {25, 25, 1}}));
-	
-	_main_character.active_chunk_pos = {0, 0, 0};
-	
-	_look_plane = yandere_object(_game_object_shader,
-	yan_resources.create_model(default_model::square), yan_resources.create_texture(default_texture::solid),
-	{{}, {0.5f, 0.5f, 0.5f}}, {1, 1, 1, 0.2f});
-	
-	
+
+	/*
+	 generic_object c_obj = generic_ob*ject(_gui_shader,
+	 yan_resources.create_model(default_model::plane), yan_resources.create_texture(_textures_map["crosshair"]));
+	 c_obj.set_position({0, 0, 0});
+	 c_obj.set_scale({25, 25, 1});
+	 _gui_elements.push_back(std::move(c_obj));*/
+
+	_look_plane = generic_object(&_main_camera,
+					&_game_object_shader,
+					default_assets.model(default_model::plane),
+					default_assets.texture(default_texture::half_transparent));
+
+	_look_plane.set_position({0, 0, 0});
+	_look_plane.set_scale({0.5f, 0.5f, 0.5f});
+
 	_last_frame_time = glfwGetTime();
 }
 
 void game_controller::window_terminate()
 {
 	glfwDestroyWindow(main_window);
-	
-	world_ctl.wait_threads();
 }
 
 void game_controller::update_status_texts()
 {
-	_texts_map.at("x_pos").set_text("x: "+std::to_string(_main_character.position.x));
-	_texts_map.at("y_pos").set_text("y: "+std::to_string(_main_character.position.y));
-	_texts_map.at("z_pos").set_text("z: "+std::to_string(_main_character.position.z));
-	
-	_texts_map.at("fps").set_text("fps: "+std::to_string(_display_fps));
+	_texts_arr[text_id::xpos]->object.set_text("x: "+std::to_string(_main_character.position.x));
+	_texts_arr[text_id::ypos]->object.set_text("y: "+std::to_string(_main_character.position.y));
+	_texts_arr[text_id::zpos]->object.set_text("z: "+std::to_string(_main_character.position.z));
+
+	_texts_arr[text_id::fps]->object.set_text("fps: "+std::to_string(_display_fps));
+
+	_debug_panel->update();
 }
 
 void game_controller::draw_update()
@@ -275,29 +285,18 @@ void game_controller::draw_update()
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	
 	
-	_yan_control->set_draw_camera(&_main_camera);
-	
 	world_ctl.draw_update();
 	
 	if(_look_direction!=ytype::direction::none)
 	{
 		glClear(GL_DEPTH_BUFFER_BIT);
 	
-		_look_plane.draw_update();
+		_look_plane.draw();
 	}
 	
 	glClear(GL_DEPTH_BUFFER_BIT);
-	_yan_control->set_draw_camera(&_gui_camera);
-	
-	for(auto& [name, text] : _texts_map)
-	{
-		text.draw_update();
-	}
-	
-	for(auto& element : _gui_elements)
-	{
-		element.draw_update();
-	}
+
+	_main_gui.draw();
 	
 	glfwSwapBuffers(main_window);
 }
@@ -320,23 +319,23 @@ void game_controller::update_func()
 	vec3d<float> c_accel = {0, 0, 0};
 	if(glfwGetKey(main_window, control_keys[ykey::forward]))
 	{
-		c_accel.z += std::sin(_yaw) * _main_character.move_speed;
-		c_accel.x += std::cos(_yaw) * _main_character.move_speed;
+		c_accel.z += std::sin(_yaw) * _main_character.move_speed * _time_delta;
+		c_accel.x += std::cos(_yaw) * _main_character.move_speed * _time_delta;
 	}
 	if(glfwGetKey(main_window, control_keys[ykey::back]))
 	{
-		c_accel.z -= std::sin(_yaw) * _main_character.move_speed;
-		c_accel.x -= std::cos(_yaw) * _main_character.move_speed;
+		c_accel.z -= std::sin(_yaw) * _main_character.move_speed * _time_delta;
+		c_accel.x -= std::cos(_yaw) * _main_character.move_speed * _time_delta;
 	}
 	if(glfwGetKey(main_window, control_keys[ykey::right]))
 	{
-		c_accel.z += std::cos(_yaw) * _main_character.move_speed;
-		c_accel.x += -std::sin(_yaw) * _main_character.move_speed;
+		c_accel.z += std::cos(_yaw) * _main_character.move_speed * _time_delta;
+		c_accel.x += -std::sin(_yaw) * _main_character.move_speed * _time_delta;
 	}
 	if(glfwGetKey(main_window, control_keys[ykey::left]))
 	{
-		c_accel.z -= std::cos(_yaw) * _main_character.move_speed;
-		c_accel.x -= -std::sin(_yaw) * _main_character.move_speed;
+		c_accel.z -= std::cos(_yaw) * _main_character.move_speed * _time_delta;
+		c_accel.x -= -std::sin(_yaw) * _main_character.move_speed * _time_delta;
 	}
 	
 	if(glfwGetKey(main_window, control_keys[ykey::jump]))
@@ -349,7 +348,7 @@ void game_controller::update_func()
 			_main_character.on_ground = false;
 		} else if(_main_character.floating)
 		{
-			c_accel.y += _main_character.move_speed/2;
+			c_accel.y += _main_character.move_speed/2 * _time_delta;
 		}
 	}
 	
@@ -360,7 +359,7 @@ void game_controller::update_func()
 			_main_character.sneaking = true;
 		} else
 		{
-			c_accel.y -= _main_character.move_speed/2;
+			c_accel.y -= _main_character.move_speed/2 * _time_delta;
 		}
 	} else
 	{
@@ -371,16 +370,17 @@ void game_controller::update_func()
 	_main_character.velocity = c_accel;
 	
 	
-	_main_phys_ctl->physics_update(_time_delta);
+	_main_physics.physics_update(_time_delta);
 	
-	raycast_result c_raycast = _main_phys_ctl->raycast(_main_character.position, _main_character.direction, _look_distance*3);
-	if(c_raycast.direction!=ytype::direction::none && _main_phys_ctl->raycast_distance(_main_character.position, c_raycast)<_look_distance)
+	const auto c_raycast = _main_raycaster->raycast(_main_character.position, _main_character.direction, _look_distance*3);
+	if(c_raycast.direction!=ytype::direction::none
+		&& _main_raycaster->raycast_distance(_main_character.position, c_raycast)<_look_distance)
 	{
 		_look_direction = c_raycast.direction;
 		_look_chunk = c_raycast.chunk;
 		_look_block = c_raycast.block;
 		
-		yan_position look_pos = {static_cast<float>(_look_chunk.x)*chunk_size+_look_block.x+0.5f, 
+		yvec3 look_pos = {static_cast<float>(_look_chunk.x)*chunk_size+_look_block.x+0.5f, 
 				static_cast<float>(_look_chunk.y)*chunk_size+_look_block.y+0.5f, 
 				static_cast<float>(_look_chunk.z)*chunk_size+_look_block.z+0.5f};
 				
@@ -389,42 +389,42 @@ void game_controller::update_func()
 			case ytype::direction::right:
 				look_pos = {look_pos.x-0.5f, look_pos.y, look_pos.z};
 			
-				_look_plane.set_rotation_axis(yan_position{0, 1, 0});
+				_look_plane.set_rotation_axis(yvec3{0, 1, 0});
 				_look_plane.set_rotation(-M_PI/2);
 			break;
 		
 			case ytype::direction::left:
 				look_pos = {look_pos.x+0.5f, look_pos.y, look_pos.z};
 			
-				_look_plane.set_rotation_axis(yan_position{0, 1, 0});
+				_look_plane.set_rotation_axis(yvec3{0, 1, 0});
 				_look_plane.set_rotation(M_PI/2);
 			break;
 			
 			case ytype::direction::up:
 				look_pos = {look_pos.x, look_pos.y-0.5f, look_pos.z};
 			
-				_look_plane.set_rotation_axis(yan_position{1, 0, 0});
+				_look_plane.set_rotation_axis(yvec3{1, 0, 0});
 				_look_plane.set_rotation(M_PI/2);
 			break;
 			
 			case ytype::direction::down:
 				look_pos = {look_pos.x, look_pos.y+0.5f, look_pos.z};
 			
-				_look_plane.set_rotation_axis(yan_position{1, 0, 0});
+				_look_plane.set_rotation_axis(yvec3{1, 0, 0});
 				_look_plane.set_rotation(-M_PI/2);
 			break;
 			
 			case ytype::direction::forward:
 				look_pos = {look_pos.x, look_pos.y, look_pos.z-0.5f};
 			
-				_look_plane.set_rotation_axis(yan_position{0, 1, 0});
+				_look_plane.set_rotation_axis(yvec3{0, 1, 0});
 				_look_plane.set_rotation(M_PI);
 			break;
 			
 			case ytype::direction::back:
 				look_pos = {look_pos.x, look_pos.y, look_pos.z+0.5f};
 			
-				_look_plane.set_rotation_axis(yan_position{0, 1, 0});
+				_look_plane.set_rotation_axis(yvec3{0, 1, 0});
 				_look_plane.set_rotation(0);
 			break;
 			
@@ -470,7 +470,7 @@ void game_controller::mousepos_update(int x, int y)
 	
 	_main_camera.set_rotation(_yaw, _pitch);
 	
-	_main_character.direction = physics_controller::calc_dir(_yaw, _pitch);
+	_main_character.direction = physics::controller::calc_dir(_yaw, _pitch);
 	
 	if(_mouse_locked)
 	{
@@ -503,15 +503,23 @@ void game_controller::control_func(bool mouse, int key, int action, int mods, in
 		}
 	}
 	
-	if(mouse && key==GLFW_MOUSE_BUTTON_LEFT && action==GLFW_PRESS)
-	{	
-		if(_look_direction!=ytype::direction::none)
-			world_ctl.destroy_block(_look_chunk, _look_block);
-	}
-	
-	if(mouse && key==GLFW_MOUSE_BUTTON_RIGHT && action==GLFW_PRESS)
+	if(_look_direction!=ytype::direction::none)
 	{
-		world_ctl.place_block(_look_chunk, _look_block, world_block{block::stone}, _look_direction);
+		if(mouse && key==GLFW_MOUSE_BUTTON_LEFT && action==GLFW_PRESS)
+		{
+			world_ctl.world_chunks.at(_look_chunk).chunk.set_block(world_block{block::air},
+				_look_block);
+		}
+
+		if(mouse && key==GLFW_MOUSE_BUTTON_RIGHT && action==GLFW_PRESS)
+		{
+			const vec3d<int> side = direction_offset(direction_opposite(_look_direction));
+			const vec3d<int> place_block = _look_block+side;
+			const vec3d<int> place_chunk = _look_chunk+world_chunk::active_chunk(place_block);
+
+			world_ctl.world_chunks.at(place_chunk).chunk.set_block(world_block{block::stone},
+				world_chunk::closest_bound_block(place_block));
+		}
 	}
 }
 
@@ -534,6 +542,8 @@ void game_controller::resize_func(int width, int height)
 	_main_camera.create_projection(45, width/static_cast<float>(height), {0.001f, 500});
 	
 	glViewport(0, 0, width, height);
+
+	_main_gui.resize(width, height);
 }
 
 void update_slow()
@@ -564,7 +574,7 @@ void framebuffer_resize_callback(GLFWwindow* window, int width, int height)
 int main(int argc, char* argv[])
 {	
 	main_world.graphics_init();
-	
+
 	glfwSetInputMode(main_world.main_window, GLFW_STICKY_KEYS, GLFW_TRUE);
 	
 	if(glfwRawMouseMotionSupported())
@@ -579,7 +589,9 @@ int main(int argc, char* argv[])
 	glfwSetFramebufferSizeCallback(main_world.main_window, &framebuffer_resize_callback);
 
 	double last_timer = glfwGetTime();
-	double slowupdate_counter = 0.5;
+
+	const double slowupdate_max = 0.5;
+	double slowupdate_counter = slowupdate_max;
 
 	while(!glfwWindowShouldClose(main_world.main_window))
 	{
@@ -589,9 +601,9 @@ int main(int argc, char* argv[])
 		slowupdate_counter += glfwGetTime()-last_timer;
 		last_timer = glfwGetTime();
 		
-		if(slowupdate_counter>0.5)
+		if(slowupdate_counter>slowupdate_max)
 		{
-			slowupdate_counter -= 0.5;
+			slowupdate_counter -= slowupdate_max;
 			update_slow();
 		}
 		

@@ -21,7 +21,7 @@ noise_generator::noise_generator(unsigned seed)
 	_s_offset = s_gen();
 }
 
-unsigned noise_generator::fast_random(unsigned seed)
+unsigned noise_generator::fast_random(unsigned seed) noexcept
 {
 	seed ^= (seed << 13);
 	seed ^= (seed >> 7);
@@ -30,7 +30,7 @@ unsigned noise_generator::fast_random(unsigned seed)
 	return seed;
 }
 
-unsigned noise_generator::fast_hash(float val)
+unsigned noise_generator::fast_hash(float val) noexcept
 {
 	static_assert(sizeof(unsigned)==sizeof(val), "type sizes dont match, yikes");
 	
@@ -39,39 +39,42 @@ unsigned noise_generator::fast_hash(float val)
 	return hashed & 0xfffffff8;
 }
 
-float noise_generator::vec_gradient(float x_h, float y_h, float x_p, float y_p)
+float noise_generator::vec_gradient(const float x_h, const float y_h, const float x_p, const float y_p) const noexcept
 {
-	int y_s = fast_hash(y_h);
+	const int y_s = fast_hash(y_h);
 
-	float val_x = (fast_random((fast_hash(x_h) ^ ((y_s<<6)+(y_s>>2)))) ^ ((_s_offset<<7)+(_s_offset>>3)))/static_cast<float>(UINT_MAX);
-	float val_y = std::sqrt(1-val_x*val_x);
+	const float val_x =
+		fast_random(~((fast_hash(x_h) ^ ((y_s<<6)+(y_s>>2)))) + ((_s_offset<<7)+(_s_offset>>3)))
+		/static_cast<float>(UINT_MAX);
+
+	const float val_y = std::sqrt(1-val_x*val_x);
 	
 	return val_x*x_p+val_y*y_p;
 }
 
-float noise_generator::smoothstep(float val)
+float noise_generator::smoothstep(const float val) noexcept
 {
 	return val*val * (3 - 2*val);
 }
 
-float noise_generator::noise(float x, float y)
+float noise_generator::noise(const float x, const float y) const noexcept
 {	
 	const float twice_max_val = std::sqrt(2)/2;
 	const float max_val = std::sqrt(2)/4;
 
-	int cell_x = std::floor(x);
-	int cell_y = std::floor(y);
+	const int cell_x = std::floor(x);
+	const int cell_y = std::floor(y);
 	
-	float dist_x = x-cell_x;
-	float dist_y = y-cell_y;
+	const float dist_x = x-cell_x;
+	const float dist_y = y-cell_y;
 	
-	float smoothX = smoothstep(dist_x);
-	float noise_val = std::lerp(std::lerp(
+	const float smooth_x = smoothstep(dist_x);
+	const float noise_val = std::lerp(std::lerp(
 	vec_gradient(cell_x, cell_y, dist_x, dist_y),
-	vec_gradient(cell_x+1, cell_y, dist_x-1, dist_y), smoothX),
+	vec_gradient(cell_x+1, cell_y, dist_x-1, dist_y), smooth_x),
 	std::lerp(
 	vec_gradient(cell_x, cell_y+1, dist_x, dist_y-1),
-	vec_gradient(cell_x+1, cell_y+1, dist_x-1, dist_y-1), smoothX), smoothstep(dist_y));
+	vec_gradient(cell_x+1, cell_y+1, dist_x-1, dist_y-1), smooth_x), smoothstep(dist_y));
 
 	//the range should be between 0 and 1
 	return (max_val+noise_val)/twice_max_val;

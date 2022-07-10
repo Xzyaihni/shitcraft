@@ -5,6 +5,8 @@
 
 namespace world_types
 {
+	const int chunk_size = 32;
+
 	struct tex_pos
 	{
 		int x;
@@ -71,8 +73,6 @@ namespace world_types
 	{
 		bool grassy;
 	};
-	
-	const float block_model_size = 1.0f/static_cast<float>(chunk_size);
 };
 
 #endif

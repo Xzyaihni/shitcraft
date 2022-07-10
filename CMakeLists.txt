@@ -7,12 +7,16 @@ option(Y_SANITIZE "build with address sanitizer" "OFF")
 
 set(YANDERELIBS "yanderegllib/glcyan.cpp"
 "yanderegllib/glcore.cpp"
-"yanderegllib/yanconv.cpp")
+"yanderegllib/ycamera.cpp"
+"yanderegllib/yanconv.cpp"
+"yanderegllib/ygui.cpp")
 
 
 set(SOURCE_FILES main.cpp
 character.cpp
 chunk.cpp
+cmap.cpp
+cmodel.cpp
 wgen.cpp
 wctl.cpp
 wblock.cpp
@@ -29,16 +33,11 @@ else()
 	set(CMAKE_BUILD_TYPE Release)
 endif()
 
-include_directories(${PROJECT_SOURCE_DIR}
-"${PROJECT_SOURCE_DIR}/yanderegllib")
-
-find_package(Threads REQUIRED)
-find_package(TBB REQUIRED)
-find_package(glm REQUIRED)
 find_package(OpenGL REQUIRED)
+find_package(X11 REQUIRED)
+find_package(glm REQUIRED)
 find_package(glfw3 REQUIRED)
 find_package(GLEW REQUIRED)
-find_package(X11 REQUIRED)
 find_package(Freetype REQUIRED)
 
 add_custom_target(folder_files
@@ -53,14 +52,17 @@ add_executable(${PROJECT_NAME} ${PROJECT_SOURCE_DIR}/${SOURCE_FILES})
 
 add_dependencies(${PROJECT_NAME} folder_files)
 
-target_include_directories(${PROJECT_NAME} PRIVATE ${OPENGL_INCLUDE_DIR}
+target_include_directories(${PROJECT_NAME} PRIVATE "${PROJECT_SOURCE_DIR}/yanderegllib"
+${GLFW_INCLUDE_DIRS}
+${OPENGL_INCLUDE_DIR}
 ${GLUT_INCLUDE_DIR}
 ${FREETYPE_INCLUDE_DIRS})
 
 
 
 if(${Y_DEBUG})
-	target_link_libraries(${PROJECT_NAME} -O1 -pg -Wall)
+	add_definitions(-DDEBUG)
+	target_link_libraries(${PROJECT_NAME} -O1 -pg -Wall -Werror -pedantic-errors)
 	
 	if(${Y_SANITIZE})
 		target_link_libraries(${PROJECT_NAME} -fsanitize=address)
@@ -69,13 +71,10 @@ else()
 	target_link_libraries(${PROJECT_NAME} -O3)
 endif()
 
-target_link_libraries(${PROJECT_NAME} ${THREADS_LIBRARIES} -lpthread)
-target_link_libraries(${PROJECT_NAME} tbb)
-	
 target_link_libraries(${PROJECT_NAME} ${OPENGL_LIBRARIES})
-target_link_libraries(${PROJECT_NAME} ${GLEW_LIBRARIES})
-target_link_libraries(${PROJECT_NAME} glfw)
+target_link_libraries(${PROJECT_NAME} glfw3 ${GLFW_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} GLEW::glew)
 target_link_libraries(${PROJECT_NAME} ${X11_LIBRARIES})
-target_link_libraries(${PROJECT_NAME} ${FREETYPE_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} Freetype::Freetype)
 
-target_link_libraries(${PROJECT_NAME} glm::glm)
+target_link_libraries(${PROJECT_NAME} glm)

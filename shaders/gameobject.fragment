@@ -3,8 +3,7 @@
 out vec4 fragColor;
 
 in vec3 vertex_position;
-in vec4 vertex_color;
-in vec2 tex_coordinate;
+in vec2 tex_coord;
 
 uniform vec3 fog_color;
 uniform float render_distance;
@@ -20,28 +19,16 @@ vec3 color_interp(vec3 col0, vec3 col1, float interp)
 
 void main()
 {
-	vec4 t_frag_color = vertex_color * texture(user_texture, tex_coordinate);
-
-	if(t_frag_color.a<0.05f)
-	{
-		discard;
-	}
+	vec4 t_frag_color = texture(user_texture, tex_coord);
 
 	float player_distance = distance(vertex_position, player_pos);
-	float visible_distance = 0;
 	
-	//yes this is hardcoded, no im not wasting performance to pass a value into this
-	int chunk_size = 32;
-	
-	float max_dist = render_distance*chunk_size-chunk_size*2;
-	
-	
-	if(player_distance>max_dist)
-	{
-		visible_distance = (player_distance/max_dist-1)*2;
-	}
-	
-	vec3 interp_color = color_interp(t_frag_color.xyz, fog_color, clamp(visible_distance, 0, 1));
+	//how close to the player the smoke starts
+	const int disappear_ratio = 4;
+
+	float visible_distance = disappear_ratio-(player_distance/render_distance)*disappear_ratio;
+
+	vec3 interp_color = color_interp(fog_color, t_frag_color.xyz, clamp(visible_distance, 0, 1));
 
 	fragColor = vec4(interp_color, t_frag_color.w);
 }

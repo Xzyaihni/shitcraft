@@ -6,10 +6,10 @@
 
 #include "physics.h"
 
-class character : public physics_object
+class character : public physics::object
 {
 public:
-	using physics_object::physics_object;
+	using physics::object::object;
 	
 	bool on_ground = false;
 	bool mid_jump = false;
@@ -19,9 +19,6 @@ public:
 	
 	float move_speed = 0;
 	float jump_strength = 1.5f;
-
-private:
-	physics_controller* _phys_ctl;
 };
 
 #endif
